@@ -42,39 +42,6 @@ public class Server {
     }
     
     /**
-     Register a user with the server.
-     
-     - Parameter user: The name of the user.
-     - Parameter pin: The pin given by the server administrator.
-     - Parameter completion: A closure called when the request is finished.
-     - Parameter result: The created user connection, or an error.
-     */
-    public func register(user: String, using pin: Int, completion: @escaping (_ result: Result<User, RendezvousError>) -> Void) throws {
-        // Create a new identity key pair
-        Crypto.ensureRandomness()
-        let userKey = try SigningPrivateKey()
-        
-        let headers: HTTPHeaders = [
-            "pin": "\(pin)"
-        ]
-        
-        let seconds = Date().seconds
-        let info = RV_InternalUser.with {
-            $0.publicKey = userKey.publicKey.rawRepresentation
-            $0.name = user
-            $0.devices = []
-            $0.creationTime = seconds
-            $0.timestamp = seconds
-        }
-        
-        let data = try info.data(signedWith: userKey)
-        
-        upload(data, to: "user/register", headers: headers, onSuccess: {
-            User(url: self.url, userKey: userKey, info: info)
-        }, completion: completion)
-    }
-    
-    /**
      Register a user, and upload prekeys and topic keys.
      
      - Parameter user: The name of the user.
@@ -82,46 +49,50 @@ public class Server {
      - Parameter completion: A closure called when the request is finished.
      - Parameter result: The created device connection, or an error.
      */
-    public func registerWithKeys(user: String, using pin: Int, completion: @escaping (_ result: Result<Device, RendezvousError>) -> Void) throws {
+    public func register(user: String, using pin: Int, onError: @escaping (_ error: RendezvousError) -> Void, onSuccess: @escaping (_ device: Device) -> Void) {
         
-        // Create a new identity key pair
-        Crypto.ensureRandomness()
-        let userKey = try SigningPrivateKey()
-        let deviceKey = try SigningPrivateKey()
-        
-        let (preKeys, preKeysPairs) = try Device.createPreKeys(count: 50, for: deviceKey)
-        
-        var topicKeys = [SigningPublicKey : Topic.Keys]()
-        try (0..<50).forEach { _ in
-            let key = try Topic.Keys(userKey: userKey)
-            topicKeys[key.publicKeys.signatureKey] = key
-        }
-        
-        let user = try create(user: user, userKey: userKey, deviceKey: deviceKey)
-        
-        let object = RV_RegistrationBundle.with {
-            $0.info = user
-            $0.pin = UInt32(pin)
-            $0.preKeys = preKeys
-            $0.topicKeys = topicKeys.values.map { $0.publicKeys.object }
-        }
-        
-        let data = try object.serializedData()
-        
-        upload(data, to: "user/full", transform: { data -> Device in
-            guard data.count == Server.authTokenLength else {
-                throw RendezvousError.invalidServerData
+        catching(onError: onError) {
+            // Create a new identity key pair
+            Crypto.ensureRandomness()
+            let userKey = try SigningPrivateKey()
+            let deviceKey = try SigningPrivateKey()
+            
+            // Create prekeys
+            let (preKeys, preKeysPairs) = try Device.createPreKeys(count: 50, for: deviceKey)
+            
+            // Create topic keys
+            var topicKeys = [SigningPublicKey : Topic.Keys]()
+            try (0..<50).forEach { _ in
+                let key = try Topic.Keys(userKey: userKey)
+                topicKeys[key.publicKeys.signatureKey] = key
             }
-            let connection = Device(
-                url: self.url,
-                userKey: userKey,
-                info: user,
-                deviceKey: deviceKey,
-                authToken: data)
-            connection.preKeys = preKeysPairs
-            connection.topicKeys = topicKeys
-            return connection
-        }, completion: completion)
+            
+            let user = try create(user: user, userKey: userKey, deviceKey: deviceKey)
+            
+            let object = RV_RegistrationBundle.with {
+                $0.info = user
+                $0.pin = UInt32(pin)
+                $0.preKeys = preKeys
+                $0.topicKeys = topicKeys.values.map { $0.publicKeys.object }
+            }
+            
+            let data = try object.serializedData()
+            
+            upload(data, to: "user/register", onError: onError) { data in
+                guard data.count == Server.authTokenLength else {
+                    throw RendezvousError.invalidServerData
+                }
+                let connection = Device(
+                    url: self.url,
+                    userKey: userKey,
+                    info: user,
+                    deviceKey: deviceKey,
+                    authToken: data)
+                connection.preKeys = preKeysPairs
+                connection.topicKeys = topicKeys
+                onSuccess(connection)
+            }
+        }
     }
     
     private func create(user: String, userKey: SigningPrivateKey, deviceKey: SigningPrivateKey) throws -> RV_InternalUser {
@@ -143,104 +114,97 @@ public class Server {
         return user
     }
     
-    /**
-     Upload data and transform the resulting data.
-     */
-    func upload<T>(_ data: Data, to path: String, headers: HTTPHeaders? = nil, transform: @escaping (Data) throws -> T, completion: @escaping (Result<T, RendezvousError>) -> Void) {
+    func upload(_ data: Data = Data(), to path: String, headers: HTTPHeaders? = nil, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ data: Data) throws -> Void) {
         AF.upload(data, to: url.appendingPathComponent(path), headers: headers).responseData { resp in
             guard let response = resp.response else {
-                completion(.failure(.noResponse))
+                onError(.noResponse)
                 return
             }
             guard response.statusCode == 200 else {
                 let error = RendezvousError(status: response.statusCode)
-                completion(.failure(error))
+                onError(error)
                 return
             }
             guard let data = resp.data else {
-                completion(.failure(.noDataInReponse))
+                onError(.noDataInReponse)
                 return
             }
             do {
-                let t = try transform(data)
-                completion(.success(t))
+                try onSuccess(data)
             } catch let error as RendezvousError {
-                completion(.failure(error))
+                onError(error)
             } catch {
-                completion(.failure(.unknownError))
+                onError(.unknownError)
             }
         }
     }
     
-    /**
-     Upload data.
-     */
-    func upload<T>(_ data: Data, to path: String, headers: HTTPHeaders? = nil, onSuccess: @escaping () -> T, completion: @escaping (Result<T, RendezvousError>) -> Void) {
+    func upload(_ data: Data = Data(), to path: String, headers: HTTPHeaders? = nil, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping () throws -> Void) {
         AF.upload(data, to: url.appendingPathComponent(path), headers: headers).responseData { resp in
             guard let response = resp.response else {
-                completion(.failure(.noResponse))
+                onError(.noResponse)
                 return
             }
             guard response.statusCode == 200 else {
                 let error = RendezvousError(status: response.statusCode)
-                completion(.failure(error))
-                return
-            }
-            let result = onSuccess()
-            completion(.success(result))
-        }
-    }
-    
-    func download<T>(_ path: String, headers: HTTPHeaders? = nil, transform: @escaping (Data) throws -> T, completion: @escaping (Result<T, RendezvousError>) -> Void) {
-        AF.request(url.appendingPathComponent(path), headers: headers).responseData { resp in
-            guard let response = resp.response else {
-                completion(.failure(.noResponse))
-                return
-            }
-            guard response.statusCode == 200 else {
-                let error = RendezvousError(status: response.statusCode)
-                completion(.failure(error))
-                return
-            }
-            guard let data = resp.data else {
-                completion(.failure(.noDataInReponse))
+                onError(error)
                 return
             }
             do {
-                let t = try transform(data)
-                completion(.success(t))
+                try onSuccess()
             } catch let error as RendezvousError {
-                completion(.failure(error))
+                onError(error)
             } catch {
-                completion(.failure(.unknownError))
+                onError(.unknownError)
             }
         }
     }
     
-    func download(_ path: String, headers: HTTPHeaders? = nil, process: @escaping (Data) throws -> Void, completion: @escaping (RendezvousError?) -> Void) {
+    func download(_ path: String, headers: HTTPHeaders? = nil, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ data: Data) throws -> Void) {
         AF.request(url.appendingPathComponent(path), headers: headers).responseData { resp in
             guard let response = resp.response else {
-                completion(.noResponse)
+                onError(.noResponse)
                 return
             }
             guard response.statusCode == 200 else {
                 let error = RendezvousError(status: response.statusCode)
-                completion(error)
+                onError(error)
                 return
             }
             guard let data = resp.data else {
-                completion(.noDataInReponse)
+                onError(.noDataInReponse)
                 return
             }
             do {
-                try process(data)
-                completion(nil)
+                try onSuccess(data)
             } catch let error as RendezvousError {
-                completion(error)
+                onError(error)
             } catch {
-                completion(.unknownError)
+                onError(.unknownError)
             }
         }
     }
+    
+    func download(_ path: String, headers: HTTPHeaders? = nil, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping () throws -> Void) {
+        AF.request(url.appendingPathComponent(path), headers: headers).responseData { resp in
+            guard let response = resp.response else {
+                onError(.noResponse)
+                return
+            }
+            guard response.statusCode == 200 else {
+                let error = RendezvousError(status: response.statusCode)
+                onError(error)
+                return
+            }
+            do {
+                try onSuccess()
+            } catch let error as RendezvousError {
+                onError(error)
+            } catch {
+                onError(.unknownError)
+            }
+        }
+    }
+    
     
 }

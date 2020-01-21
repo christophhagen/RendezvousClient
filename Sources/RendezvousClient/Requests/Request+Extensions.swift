@@ -9,81 +9,6 @@ import Foundation
 import CryptoKit25519
 import Alamofire
 
-extension URLRequest {
-    
-    /**
-     Add binary data to the request.
-     */
-    mutating func add(body: Data) {
-        self.httpBody = body
-    }
-    
-    /**
-     Add a value for a key in the request header.
-     - Parameter value: The value to set.
-     - Parameter header: The key of the header.
-     */
-    private mutating func add(_ value: String, for header: HeaderKey) {
-        addValue(value, forHTTPHeaderField: header.rawValue)
-    }
-    
-    /**
-     Add a binary value for a header field.
-     - Parameter value: The value to set.
-     - Parameter header: The key of the header.
-     */
-    private mutating func add(binary value: Data, for key: HeaderKey) {
-        add(value.base64EncodedString(), for: key)
-    }
-    
-    /**
-     Add an authentication token.
-     - Parameter authToken: The binary authentication token.
-     */
-    mutating func add(authToken: Data) {
-        add(binary: authToken, for: .authToken)
-    }
-    
-    /**
-     Add a user name to the request.
-     */
-    mutating func add(user: String) {
-        add(user, for: .username)
-    }
-    
-    /**
-     Add a pin to the request.
-    */
-    mutating func add(pin: Int) {
-        add("\(pin)", for: .pin)
-    }
-    
-    /**
-     Add a count to the request.
-    */
-    mutating func add(count: Int) {
-        add("\(count)", for: .count)
-    }
-    
-    /**
-     Add the public key of the device.
-     */
-    mutating func add(devicePublicKey: SigningPublicKey) {
-        add(publicKey: devicePublicKey, for: .device)
-    }
-    
-    /**
-    Add the public key of the user.
-    */
-    mutating func add(userPublicKey: SigningPublicKey) {
-        add(publicKey: userPublicKey, for: .user)
-    }
-    
-    private mutating func add(publicKey: SigningPublicKey, for key: HeaderKey) {
-        add(binary: publicKey.rawRepresentation, for: key)
-    }
-}
-
 extension HTTPHeaders {
     
     /**
@@ -91,6 +16,13 @@ extension HTTPHeaders {
     */
     mutating func add(count: Int) {
         add("\(count)", for: .count)
+    }
+    
+    /**
+     Add a user name to the request.
+     */
+    mutating func add(user: String) {
+        add(user, for: .username)
     }
     
     /**

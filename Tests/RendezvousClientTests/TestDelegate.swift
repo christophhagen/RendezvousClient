@@ -37,6 +37,18 @@ final class TestDelegate: DeviceDelegate {
         }
     }
     
+    func user(changedDevice device: DeviceInfo) {
+        
+    }
+    
+    func user(addedDevice device: DeviceInfo) {
+        
+    }
+    
+    func user(removedDevice device: DeviceInfo) {
+        
+    }
+    
     func device(addedTopic topic: Topic) {
         self.topic = topic
         decrement()

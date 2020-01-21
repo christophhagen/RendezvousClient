@@ -21,6 +21,9 @@ public enum RendezvousError: Int, Error {
     /// The data from the server is invalid or unreadable
     case invalidServerData = 3
     
+    /// Some request data could not be serialized
+    case serializationFailed = 4
+    
     // MARK: Server errors
     
     /// The request does not contain all necessary data, or some data is not properly formatted.

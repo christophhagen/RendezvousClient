@@ -9,14 +9,14 @@ final class AdminTests: XCTestCase {
         ("testAdminTokenUpdate", testAdminTokenUpdate),
     ]
     
-    let server = Admin(newServer: url)
+    let server = Admin(server: url)
     
     let user = "Alice"
     
     let message = Data(repeating: 42, count: 250)
     
     let metadata = Data(repeating: 42, count: 42)
-    
+
     override func setUp() {
         resetServer()
     }
@@ -36,8 +36,10 @@ final class AdminTests: XCTestCase {
     func resetServer() {
         let e = self.expectation(description: "testReset")
         
-        server.resetDevelopmentServer { success in
-            XCTAssertTrue(success)
+        server.resetDevelopmentServer(onError: { error in
+            XCTFail("\(error)")
+            e.fulfill()
+        }) {
             e.fulfill()
         }
         
@@ -47,8 +49,10 @@ final class AdminTests: XCTestCase {
     func testAdminTokenUpdate() {
         let e = self.expectation(description: "testUpdate")
         
-        server.updateAdminToken { success in
-            XCTAssertTrue(success)
+        server.updateAdminToken(onError: { error in
+            XCTFail("\(error)")
+            e.fulfill()
+        }) {
             e.fulfill()
         }
         
@@ -57,8 +61,10 @@ final class AdminTests: XCTestCase {
         // Check that new token can change again, and thus is valid
         let e2 = self.expectation(description: "testUpdate2")
         
-        server.updateAdminToken() { success in
-            XCTAssertTrue(success)
+        server.updateAdminToken(onError: { error in
+            XCTFail("\(error)")
+            e2.fulfill()
+        }) {
             e2.fulfill()
         }
         
@@ -69,18 +75,17 @@ final class AdminTests: XCTestCase {
         let e = self.expectation(description: "testAllow")
         
         var pin: Int? = nil
-        server.allow(user: user) { (data) in
-            guard let info = data else {
-                XCTFail("Failed to allow user")
-                e.fulfill()
-                return
-            }
+        server.allow(user: user, onError: { error in
+            XCTFail("\(error)")
+            e.fulfill()
+        }) { receivedPin, expiryDate in
             // Check that expiry is at least 6 days in the future
             let time = Date().addingTimeInterval(60 * 60 * 32 * 6)
-            XCTAssert(info.expiryDate > time)
-            pin = info.pin
+            XCTAssert(expiryDate > time)
+            pin = receivedPin
             e.fulfill()
         }
+        
         self.wait(for: [e], timeout: 10)
         return pin
     }
@@ -89,89 +94,46 @@ final class AdminTests: XCTestCase {
         _ = allowUser(user)
     }
     
-    private func registerUser() -> User? {
+    private func registerUser(_ user: String) -> Device? {
         guard let pin = allowUser(user) else {
             return nil
         }
-        let server = self.server.server
-        
-        let e = self.expectation(description: "testRegisterUser")
-        var user: User? = nil
-        do {
-            try server.register(user: self.user, using: pin) { result in
-                switch result {
-                case .success(let newUser):
-                    user = newUser
-                case .failure(let error):
-                    XCTFail("\(error)")
-                }
-                e.fulfill()
-            }
-            self.wait(for: [e], timeout: 10)
-            return user
-        } catch {
-            XCTFail("\(error)")
-            e.fulfill()
-            return nil
-        }
-    }
-    
-    func testRegisterUser() {
-        _ = registerUser()
-    }
-    
-    private func registerDevice() -> Device? {
-        guard let user = registerUser() else {
-            return nil
-        }
         
         let e = self.expectation(description: #function)
-        do {
-            var device: Device? = nil
-            try user.createDevice { result in
-                switch result {
-                case .success(let newDevice):
-                    device = newDevice
-                case .failure(let error):
-                    XCTFail("\(error)")
-                }
-                e.fulfill()
-            }
-            self.wait(for: [e], timeout: 10)
-            return device
-        } catch {
+        
+        var device: Device? = nil
+        server.register(user: user, using: pin, onError: { error in
             XCTFail("\(error)")
             e.fulfill()
-            return nil
+        }) { newDevice in
+            device = newDevice
+            e.fulfill()
         }
+        self.wait(for: [e], timeout: 10)
+        return device
     }
     
     func testRegisterDevice() {
-        _ = registerDevice()
+        _ = registerUser(user)
     }
     
     private func uploadPrekeys() -> Device? {
-        guard let device = registerDevice() else {
+        guard let device = registerUser(user) else {
             return nil
         }
         let e = self.expectation(description: #function)
-        do {
-            try device.uploadPreKeys(count: 50) { result in
-                switch result {
-                case .failure(let error):
-                    XCTFail("\(error)")
-                case .success(let count):
-                    XCTAssertEqual(count, 50)
-                }
-                e.fulfill()
-            }
-            self.wait(for: [e], timeout: 10)
-            return device
-        } catch {
+        
+        var dev: Device? = nil
+        device.uploadPreKeys(count: 50, onError: { error in
             XCTFail("\(error)")
             e.fulfill()
-            return nil
+        }) {
+            dev = device
+            e.fulfill()
         }
+        self.wait(for: [e], timeout: 10)
+        return dev
+        
     }
     
     func testUploadPrekeys() {
@@ -186,14 +148,12 @@ final class AdminTests: XCTestCase {
         let e = self.expectation(description: #function)
 
         var dev: Device? = nil
-        device.uploadTopicKeys(count: 10) { result in
-            switch result {
-            case .failure(let error):
-                XCTFail("\(error)")
-            case .success(let count):
-                XCTAssertEqual(count, 10)
-                dev = device
-            }
+        device.uploadTopicKeys(count: 10, onError: { error in
+            XCTFail("\(error)")
+            e.fulfill()
+        }) { count in
+            XCTAssertEqual(count, 10)
+            dev = device
             e.fulfill()
         }
         self.wait(for: [e], timeout: 10)
@@ -212,13 +172,11 @@ final class AdminTests: XCTestCase {
         let e = self.expectation(description: #function)
 
         var dev: Device? = nil
-        device.getTopicKey(for: device.userKey) { result in
-            switch result {
-            case .failure(let error):
-                XCTFail("\(error)")
-            case .success(_):
-                dev = device
-            }
+        device.getTopicKey(for: device.userKey, onError: { error in
+            XCTFail("\(error)")
+            e.fulfill()
+        }) { _ in
+            dev = device
             e.fulfill()
         }
         self.wait(for: [e], timeout: 10)
@@ -229,51 +187,18 @@ final class AdminTests: XCTestCase {
         _ = getTopicKey()
     }
     
-    private func registerFull(user: String) -> Device? {
-        guard let pin = allowUser(user) else {
-            return nil
-        }
-        let server = self.server.server
-        
-        let e = self.expectation(description: #function)
-        do {
-            var device: Device? = nil
-            try server.registerWithKeys(user: user, using: pin) { result in
-                switch result {
-                case .success(let newDevice):
-                    device = newDevice
-                case .failure(let error):
-                    XCTFail("\(error)")
-                }
-                e.fulfill()
-            }
-            self.wait(for: [e], timeout: 10)
-            return device
-        } catch {
-            XCTFail("\(error)")
-            e.fulfill()
-            return nil
-        }
-    }
-    
-    func testRegisterFull() {
-        _ = registerFull(user: user)
-    }
-    
     func createTopic() -> (alice: Device, bob: Device, topic: Topic)? {
-        guard let alice = registerFull(user: user), let bob = registerFull(user: "Bob") else {
+        guard let alice = registerUser(user), let bob = registerUser("Bob") else {
             return nil
         }
         
         let e = self.expectation(description: #function)
         var topic: Topic? = nil
-        alice.createTopic(with: [bob.userKey : .admin]) { result in
-            switch result {
-            case .success(let newTopic):
-                topic = newTopic
-            case .failure(let error):
-                XCTFail("\(error)")
-            }
+        alice.createTopic(with: [bob.userKey : .admin], onError: { error in
+            XCTFail("\(error)")
+            e.fulfill()
+        }) { newTopic in
+            topic = newTopic
             e.fulfill()
         }
         self.wait(for: [e], timeout: 10)
@@ -292,20 +217,12 @@ final class AdminTests: XCTestCase {
             return nil
         }
         let e = self.expectation(description: #function)
-        do {
-            try data.alice.upload(message: message, metadata: metadata, to: data.topic) { result in
-                switch result {
-                case .success(let chain):
-                    XCTAssertEqual(chain.index, 1)
-                case .failure(let error):
-                    XCTFail("\(error)")
-                }
-                e.fulfill()
-            }
-        } catch {
+        data.alice.upload(message: message, metadata: metadata, to: data.topic, onError: { error in
             XCTFail("\(error)")
             e.fulfill()
-            return nil
+        }) { chain in
+            XCTAssertEqual(chain.index, 1)
+            e.fulfill()
         }
         self.wait(for: [e], timeout: 10)
         return data
@@ -322,17 +239,14 @@ final class AdminTests: XCTestCase {
         data.bob.delegate = delegate
         // Expect topic update and message
         delegate.set(expectation: self.expectation(description: #function), after: 2)
-        let expectation = self.expectation(description: #function + "2")
-        data.bob.getMessages { err in
-            guard let error = err else {
-                expectation.fulfill()
-                return
-            }
+        let e = self.expectation(description: #function + "2")
+        data.bob.getMessages(onError: { error in
             XCTFail("\(error)")
-            expectation.fulfill()
-            print("Finished")
+            e.fulfill()
+        }) {
+            e.fulfill()
         }
-        self.wait(for: [delegate.expectation!, expectation], timeout: 10)
+        self.wait(for: [delegate.expectation!, e], timeout: 10)
         guard let message = delegate.message else {
             XCTFail("No message")
             return

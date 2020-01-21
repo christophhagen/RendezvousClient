@@ -6,14 +6,19 @@
 //
 
 import Foundation
+import SwiftProtobuf
 
-func catching<T>(completion: @escaping (Result<T, RendezvousError>) -> Void, block: @escaping () throws -> Void) {
+public typealias RendezvousErrorHandler = (_ error: RendezvousError) -> Void
+
+func catching(onError: @escaping RendezvousErrorHandler, block: () throws -> Void) {
     do {
         try block()
     } catch let error as RendezvousError {
-        completion(.failure(error))
+        onError(error)
+    } catch _ as BinaryEncodingError {
+        onError(.serializationFailed)
     } catch {
-        completion(.failure(.unknownError))
+        onError(.unknownError)
     }
 }
 
