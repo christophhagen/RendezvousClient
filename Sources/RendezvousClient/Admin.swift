@@ -12,7 +12,7 @@ public final class Admin: Server {
     
     /// The default admin token when setting up a new server.
     public static var defaultAdminToken: Data {
-        Data(repeating: 0, count: Server.authTokenLength)
+        Data(repeating: 0, count: Constants.authTokenLength)
     }
     
     /// The administrator token
@@ -52,7 +52,7 @@ public final class Admin: Server {
      */
     public func updateAdminToken(onError: @escaping RendezvousErrorHandler, onSuccess: @escaping () -> Void) {
         download("admin/renew", headers: authTokenHeaders, onError: onError) { data in
-            guard data.count == Server.authTokenLength else {
+            guard data.count == Constants.authTokenLength else {
                 throw RendezvousError.invalidServerData
             }
             self.adminToken = data

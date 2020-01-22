@@ -7,9 +7,8 @@
 
 import Foundation
 import SwiftProtobuf
-import CryptoKit25519
 
-protocol TimestampedProtobuf: SignedProtobuf, PublicKeyProtobuf {
+protocol TimestampedProtobuf: SignedProtobuf {
     
     var timestamp: UInt32 { get set }
 }
@@ -24,17 +23,18 @@ extension TimestampedProtobuf {
     /**
      Check that the request has been created recently, and that the signature matches the contained public key.
      
+     - Parameter key: The key used to sign the message
      - Throws: `RendezvousError`, `BinaryEncodingError`
      - Note: Possible Errors:
         - `RendezvousError.invalidSignature`, if the signature doesn't match the public key.
         - `RendezvousError.requestOutdated`, if the timestamp of the request is not fresh.
         - `BinaryEncodingError`, if the protobuf operations produce an error.
      */
-    func isFreshAndSigned() throws {
+    func isFreshAndSigned(with key: SigningPublicKey) throws {
         guard timestamp > Date.secondsNow + Self.requestFreshnessAllowedDelay else {
             throw RendezvousError.requestOutdated
         }
-        try verifySignature()
+        try verifySignature(with: key)
     }
     
     /**
@@ -47,7 +47,7 @@ extension TimestampedProtobuf {
         self.timestamp = Date.secondsNow
         self.signature = Data()
         let data = try serializedData()
-        self.signature = privateKey.signature(for: data)
+        self.signature = try privateKey.signature(for: data)
     }
     
     /**

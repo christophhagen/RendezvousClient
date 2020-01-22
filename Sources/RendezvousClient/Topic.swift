@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import CryptoKit25519
+import CryptoKit
 
 public class Topic {
     
@@ -149,12 +149,12 @@ public class Topic {
         let publicKeys: Key
         
         init(userKey: SigningPrivateKey) throws {
-            let signing = try SigningPrivateKey()
-            let encryption = try EncryptionPrivateKey()
+            let signing = SigningPrivateKey()
+            let encryption = EncryptionPrivateKey()
             
             self.signing = signing
             self.encryption = encryption
-            self.publicKeys = Key(userKey: userKey, signatureKey: signing.publicKey, encryptionKey: encryption.publicKey)
+            self.publicKeys = try Key(userKey: userKey, signatureKey: signing.publicKey, encryptionKey: encryption.publicKey)
         }
         
         init(message: RV_TopicKeyMessage, preKey: EncryptionPrivateKey, userKey: SigningPublicKey) throws {
@@ -163,13 +163,13 @@ public class Topic {
 
             // Decrypt the topic key
             let decrypted = try Crypto.decrypt(message.encryptedTopicKeys, using: preKey)
-            guard decrypted.count == Curve25519.keyLength * 2 else {
+            guard decrypted.count == Crypto.eccKeyLength * 2 else {
                 throw RendezvousError.unknownError
             }
             
             // Extract signature and encryption key
-            let signaturePrivateKey = try! SigningPrivateKey(rawRepresentation: decrypted[0..<Curve25519.keyLength])
-            let encryptionPrivateKey = try! EncryptionPrivateKey(rawRepresentation: decrypted.advanced(by: Curve25519.keyLength))
+            let signaturePrivateKey = try! SigningPrivateKey(rawRepresentation: decrypted[0..<Crypto.eccKeyLength])
+            let encryptionPrivateKey = try! EncryptionPrivateKey(rawRepresentation: decrypted.advanced(by: Crypto.eccKeyLength))
             
             // Check that public keys match
             guard signaturePrivateKey.publicKey == topicKey.signatureKey,
@@ -183,7 +183,7 @@ public class Topic {
             self.publicKeys = topicKey
         }
         
-        func message(forDevice device: SigningPublicKey, withPrekey key: RV_DevicePrekey) throws -> RV_TopicKeyMessage {
+        func message(withPrekey key: RV_DevicePrekey) throws -> RV_TopicKeyMessage {
             return try .with { message in
                 message.devicePreKey = key.preKey
                 message.topicKey = publicKeys.object
@@ -205,16 +205,16 @@ public class Topic {
         /// The signature of (signatureKey | encryptionKey) with the user key
         let signature: Data
         
-        init(userKey: SigningPrivateKey, signatureKey: SigningPublicKey, encryptionKey: EncryptionPublicKey) {
+        init(userKey: SigningPrivateKey, signatureKey: SigningPublicKey, encryptionKey: EncryptionPublicKey) throws {
             let data = signatureKey.rawRepresentation + encryptionKey.rawRepresentation
             self.userKey = userKey.publicKey
             self.signatureKey = signatureKey
             self.encryptionKey = encryptionKey
-            self.signature = userKey.signature(for: data)
+            self.signature = try userKey.signature(for: data)
         }
         
         init(object: RV_TopicKeyResponse.User) throws {
-            guard let userKey = object.publicKey.signingPublicKey else {
+            guard let userKey = try? SigningPublicKey(rawRepresentation: object.publicKey) else {
                 throw RendezvousError.unknownError
             }
             try self.init(object: object.topicKey, userKey: userKey)
@@ -224,8 +224,8 @@ public class Topic {
             guard userKey.isValidSignature(object.signature, for: object.signatureKey + object.encryptionKey) else {
                 throw RendezvousError.invalidSignature
             }
-            guard let signatureKey = object.signatureKey.signingPublicKey,
-                let encryptionKey = object.encryptionKey.encryptionPublicKey else {
+            guard let signatureKey = try? SigningPublicKey(rawRepresentation: object.signatureKey),
+                let encryptionKey = try? EncryptionPublicKey(rawRepresentation: object.encryptionKey) else {
                     throw RendezvousError.unknownError
             }
             

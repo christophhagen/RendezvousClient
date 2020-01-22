@@ -7,7 +7,11 @@
 
 import Foundation
 import SwiftProtobuf
-import CryptoKit25519
+
+protocol PublicKeyProtobuf: SwiftProtobuf.Message {
+    
+    var publicKey: Data { get set }
+}
 
 protocol SignedProtobuf: SwiftProtobuf.Message {
     
@@ -54,7 +58,7 @@ extension SignedProtobuf {
     mutating func sign(with privateKey: SigningPrivateKey) throws {
         self.signature = Data()
         let data = try self.serializedData()
-        self.signature = privateKey.signature(for: data)
+        self.signature = try privateKey.signature(for: data)
     }
     
     /**
@@ -66,23 +70,7 @@ extension SignedProtobuf {
         var object = self
         object.signature = Data()
         let data = try object.serializedData()
-        object.signature = privateKey.signature(for: data)
+        object.signature = try privateKey.signature(for: data)
         return try object.serializedData()
-    }
-}
-
-extension SignedProtobuf where Self: PublicKeyProtobuf {
-    
-    /**
-     Verify the signature of a protobuf object with the included public key.
-     - Throws: `RendezvousError.invalidSignature`, `BinaryEncodingError`
-     */
-    func verifySignature() throws {
-        let publicKey = try getPublicKey()
-        let signature = self.signature
-        let data = try dataWithoutSignature()
-        guard publicKey.isValidSignature(signature, for: data) else {
-            throw RendezvousError.invalidSignature
-        }
     }
 }

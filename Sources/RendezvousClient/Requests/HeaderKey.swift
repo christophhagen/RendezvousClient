@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 /**
  An enum with all possible header keys used by Rendezvous.

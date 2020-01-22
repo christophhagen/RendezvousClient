@@ -7,12 +7,14 @@
 
 import Foundation
 import Alamofire
-import CryptoKit25519
 
+enum Constants {
+    
+    static let authTokenLength = 16
+}
 
 public class Server {
     
-    static let authTokenLength = 16
     
     /// The server url
     let url: URL
@@ -53,19 +55,14 @@ public class Server {
         
         catching(onError: onError) {
             // Create a new identity key pair
-            Crypto.ensureRandomness()
-            let userKey = try SigningPrivateKey()
-            let deviceKey = try SigningPrivateKey()
+            let userKey = Crypto.newSigningKey()
+            let deviceKey = Crypto.newSigningKey()
             
             // Create prekeys
-            let (preKeys, preKeysPairs) = try Device.createPreKeys(count: 50, for: deviceKey)
+            let (preKeys, preKeysPairs) = try Crypto.createPreKeys(count: 50, for: deviceKey)
             
             // Create topic keys
-            var topicKeys = [SigningPublicKey : Topic.Keys]()
-            try (0..<50).forEach { _ in
-                let key = try Topic.Keys(userKey: userKey)
-                topicKeys[key.publicKeys.signatureKey] = key
-            }
+            let topicKeys = try Crypto.createTopicKeys(count: 50, for: userKey)
             
             let user = try create(user: user, userKey: userKey, deviceKey: deviceKey)
             
@@ -73,13 +70,13 @@ public class Server {
                 $0.info = user
                 $0.pin = UInt32(pin)
                 $0.preKeys = preKeys
-                $0.topicKeys = topicKeys.values.map { $0.publicKeys.object }
+                $0.topicKeys = topicKeys.map { $0.publicKeys.object }
             }
             
             let data = try object.serializedData()
             
             upload(data, to: "user/register", onError: onError) { data in
-                guard data.count == Server.authTokenLength else {
+                guard data.count == Constants.authTokenLength else {
                     throw RendezvousError.invalidServerData
                 }
                 let connection = Device(

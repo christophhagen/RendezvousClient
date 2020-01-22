@@ -6,9 +6,8 @@
 //
 
 import Foundation
-import CryptoKit25519
 import Alamofire
-import CryptoSwift
+import CryptoKit
 
 public protocol DeviceDelegate: class {
     
@@ -26,6 +25,12 @@ public protocol DeviceDelegate: class {
 }
 
 public final class Device: Server {
+
+    /// The private identity key of the user
+    let userPrivateKey: SigningPrivateKey
+    
+    /// The public identity key of the user
+    let userKey: SigningPublicKey
     
     /// The private key of the device
     let devicePrivateKey: SigningPrivateKey
@@ -33,20 +38,14 @@ public final class Device: Server {
     /// The public key of the device
     let deviceKey: SigningPublicKey
     
-    /// The public identity key of the user
-    let userKey: SigningPublicKey
-    
-    /// The private identity key of the user
-    let userPrivateKey: SigningPrivateKey
-    
     /// Info about the user and the devices
     private var object: RV_InternalUser
     
     let authToken: Data
     
-    var preKeys = [EncryptionPublicKey : EncryptionPrivateKey]()
+    var preKeys = [EncryptionKeyPair]()
     
-    var topicKeys = [SigningPublicKey: Topic.Keys]()
+    var topicKeys = [Topic.Keys]()
     
     var topics = [Data : Topic]()
     
@@ -103,7 +102,7 @@ public final class Device: Server {
     public func uploadPreKeys(count: Int = 100, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping () -> Void) {
         catching(onError: onError) {
             // Create the private pre keys
-            let (publicPreKeys, privatePreKeys) = try Device.createPreKeys(count: count, for: devicePrivateKey)
+            let (publicPreKeys, privatePreKeys) = try Crypto.createPreKeys(count: count, for: devicePrivateKey)
             
             // Create the upload request
             let object = RV_DevicePrekeyUploadRequest.with {
@@ -115,7 +114,7 @@ public final class Device: Server {
             let data = try object.serializedData()
             upload(data, to: "device/prekeys", onError: onError) {
                 // Save the uploaded prekeys
-                self.preKeys.merge(privatePreKeys, uniquingKeysWith: { a, _ in a })
+                self.preKeys.append(contentsOf: privatePreKeys)
                 onSuccess()
             }
         }
@@ -173,7 +172,7 @@ public final class Device: Server {
             
             // Make the request to upload the topic keys
             self.upload(data, to: "user/topickeys", onError: onError) {
-                topicKeys.forEach { self.topicKeys[$0.publicKeys.signatureKey] = $0 }
+                self.topicKeys.append(contentsOf: topicKeys)
                 onSuccess(topicKeys.count)
             }
         }
@@ -187,13 +186,13 @@ public final class Device: Server {
      - Parameter onSuccess: A closure called with the topic if the request succeeds.
      - Parameter topic: The resulting topic
      */
-    public func createTopic(with members: [SigningPublicKey : Topic.Role], onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ topic: Topic) -> Void) {
+    public func createTopic(with members: [(SigningPublicKey, Topic.Role)], onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ topic: Topic) -> Void) {
         
         let request = RV_TopicKeyRequest.with {
             $0.publicKey = userKey.rawRepresentation
             $0.deviceKey = deviceKey.rawRepresentation
             $0.authToken = authToken
-            $0.users = members.keys.map { $0.rawRepresentation }
+            $0.users = members.map { $0.0.rawRepresentation }
         }
         guard let data = try? request.serializedData() else {
             onError(.serializationFailed)
@@ -206,15 +205,15 @@ public final class Device: Server {
             // Here we ignore all members which don't have a topic key at the moment.
             let memberData = keys.compactMap { key -> (role: Topic.Role, key: Topic.Key)? in
                 // Check that topic key belongs to a member of the group
-                guard let role = members[key.userKey] else {
+                guard let role = members.first(where: { $0.0 == key.userKey })?.1 else {
                     return nil
                 }
                 return (role, key)
             }
-            guard let topicKey = self.topicKeys.popFirst()?.value else {
+            guard let topicKey = self.topicKeys.popLast() else {
                 throw RendezvousError.invalidRequest
             }
-            let messageKey = try SymmetricKey(size: .bits256)
+            let messageKey = Crypto.newMessageKey()
             let now = Date.secondsNow
             let roles = [(role: .admin, key: topicKey.publicKeys)] + memberData
             var topic = try RV_Topic.with { t in
@@ -223,7 +222,7 @@ public final class Device: Server {
                 t.indexOfMessageCreator = 0
                 // Encrypt the message key to each user with their topic key
                 t.members = try roles.map { role, key in
-                    try key.encrypt(messageKey.rawBytes, role: role) }
+                    try key.encrypt(messageKey.rawRepresentation, role: role) }
                 t.timestamp = now
             }
             
@@ -256,8 +255,8 @@ public final class Device: Server {
             }
             // Encrypt the data
             let encryptedMessage = try AES.GCM.seal(message, using: topic.messageKey)
-            let encryptedMetadata = try AES.GCM.seal(metadata, using: topic.messageKey).combined
-            let hash = SHA2(variant: .sha256).calculate(for: encryptedMessage.ciphertext.bytes)
+            let encryptedMetadata = try AES.GCM.seal(metadata, using: topic.messageKey).combined!
+            let hash = Crypto.sha256(of: encryptedMessage.ciphertext)
             
             // Create the message
             var request = RV_TopicMessageUpload.with {
@@ -362,7 +361,8 @@ public final class Device: Server {
         guard info.timestamp > object.timestamp else {
             throw RendezvousError.requestOutdated
         }
-        try info.isFreshAndSigned()
+        let signatureKey = try SigningPublicKey(rawRepresentation: object.publicKey)
+        try info.isFreshAndSigned(with: signatureKey)
         
         guard info.publicKey == object.publicKey else {
             throw RendezvousError.invalidServerData
@@ -402,39 +402,13 @@ public final class Device: Server {
     }
     
     // MARK: Keys
-    
-    static func createPreKeys(count: Int, for device: SigningPrivateKey) throws -> (prekeys: [RV_DevicePrekey], keys: [EncryptionPublicKey : EncryptionPrivateKey])  {
-        Crypto.ensureRandomness()
-        var keys = [EncryptionPublicKey : EncryptionPrivateKey]()
-        try (0..<count).forEach { _ in
-            let privateKey = try EncryptionPrivateKey()
-            keys[privateKey.publicKey] = privateKey
-        }
-        
-        // Sign the keys and package them
-        let preKeys: [RV_DevicePrekey] = keys.keys.map { publicKey in
-            RV_DevicePrekey.with {
-                let preKey = publicKey.rawRepresentation
-                $0.preKey = preKey
-                $0.signature = device.signature(for: preKey)
-            }
-        }
-        return (preKeys, keys)
-    }
-    
-    func makeTopicKeys(count: Int) throws -> [Topic.Keys] {
-        try (0..<count).map { _ in
-            try Topic.Keys(userKey: userPrivateKey)
-        }
-    }
-    
+
     func makeTopicKeys(fromPreKeys preKeys: RV_DevicePreKeyBundle) throws -> (topicKeys: [Topic.Keys], messages: [RV_TopicKeyMessageList]) {
         var existingDevices = Set(object.devices.map { $0.deviceKey })
         let count = Int(preKeys.keyCount)
         
         // Create the topic keys
-        Crypto.ensureRandomness()
-        let topicKeys = try makeTopicKeys(count: count)
+        let topicKeys = try Crypto.createTopicKeys(count: count, for: userPrivateKey)
         
         // Create the resulting message dictionary
         var messages = [Data : RV_TopicKeyMessageList]()
@@ -457,7 +431,7 @@ public final class Device: Server {
                     guard device.isValidSignature(key.signature, for: key.preKey) else {
                         throw RendezvousError.invalidRequest
                     }
-                    return try topicKeys[index].message(forDevice: device, withPrekey: key)
+                    return try topicKeys[index].message(withPrekey: key)
                 }
             }
         }
@@ -480,13 +454,13 @@ public final class Device: Server {
         
         // Find the right private key
         let preKey = try EncryptionPublicKey(rawRepresentation: message.devicePreKey)
-        guard let privateKey = preKeys[preKey] else {
+        guard let privateKey = preKeys.first(where: { $0.public == preKey })?.private else {
             // No prekey found
             throw RendezvousError.unknownError
         }
         
         let topicKey = try Topic.Keys(message: message, preKey: privateKey, userKey: userKey)
-        topicKeys[topicKey.publicKeys.signatureKey] = topicKey
+        topicKeys.append(topicKey)
     }
     
     private func received(topicUpdates: [RV_Topic]) throws {
@@ -512,7 +486,7 @@ public final class Device: Server {
             throw RendezvousError.unknownError
         }
         let signatureKey = try SigningPublicKey(rawRepresentation: keyData)
-        guard let keys = topicKeys[signatureKey] else {
+        guard let keys = topicKeys.first(where: { $0.publicKeys.signatureKey == signatureKey }) else {
             throw RendezvousError.unknownError
         }
         let topic = try Topic(newTopic: topic, withTopicKey: keys)
@@ -556,7 +530,7 @@ public final class Device: Server {
         }
         
         // Calculate the new output
-        let output = Crypto.SHA256(topic.verifiedOutput + message.signature)
+        let output = Crypto.sha256(of: topic.verifiedOutput + message.signature)
         guard output == message.output else {
             // Invalid chain. This implies an inconsistency in the message chain,
             // which could indicate that the server is attempting to tamper with

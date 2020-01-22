@@ -6,8 +6,10 @@ import PackageDescription
 let package = Package(
     name: "RendezvousClient",
     platforms: [
-        .macOS(.v10_12),
-        .iOS(.v10)
+        .macOS(.v10_15),
+        .iOS(.v13),
+        .watchOS(.v6),
+        .tvOS(.v13)
     ],
     products: [
         // Products define the executables and libraries produced by a package, and make them visible to other packages.
@@ -18,8 +20,7 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.7.0"),
-        .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.0.0-rc.3"),
-        .package(url: "https://github.com/christophhagen/CryptoKit25519.git", from: "0.4.0")
+        .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.0.0-rc.3")
         
     ],
     targets: [
@@ -27,7 +28,7 @@ let package = Package(
         // Targets can depend on other targets in this package, and on products in packages which this package depends on.
         .target(
             name: "RendezvousClient",
-            dependencies: ["CryptoKit25519", "SwiftProtobuf", "Alamofire"]),
+            dependencies: ["SwiftProtobuf", "Alamofire"]),
         .testTarget(
             name: "RendezvousClientTests",
             dependencies: ["RendezvousClient"]),

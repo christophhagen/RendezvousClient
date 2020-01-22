@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import CryptoKit25519
 import Alamofire
 
 extension HTTPHeaders {
