@@ -25,18 +25,21 @@ public protocol DeviceDelegate: class {
 }
 
 public final class Device: Server {
+    
+    /// The name of the user.
+    public let userName: String
 
     /// The private identity key of the user
     let userPrivateKey: SigningPrivateKey
     
     /// The public identity key of the user
-    let userKey: SigningPublicKey
+    public let userKey: SigningPublicKey
     
     /// The private key of the device
     let devicePrivateKey: SigningPrivateKey
     
     /// The public key of the device
-    let deviceKey: SigningPublicKey
+    public let deviceKey: SigningPublicKey
     
     /// Info about the user and the devices
     private var object: RV_InternalUser
@@ -74,13 +77,14 @@ public final class Device: Server {
     /**
      Create a device.
      */
-    init(url: URL, userKey: SigningPrivateKey, info: RV_InternalUser,  deviceKey: SigningPrivateKey, authToken: Data) {
+    init(name: String, url: URL, userKey: SigningPrivateKey, info: RV_InternalUser,  deviceKey: SigningPrivateKey, authToken: Data) {
         self.devicePrivateKey = deviceKey
         self.deviceKey = deviceKey.publicKey
         self.authToken = authToken
         self.userPrivateKey = userKey
         self.userKey = userKey.publicKey
         self.object = info
+        self.userName = name
         super.init(url: url)
         
     }

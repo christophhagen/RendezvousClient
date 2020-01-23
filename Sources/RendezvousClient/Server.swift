@@ -46,12 +46,12 @@ public class Server {
     /**
      Register a user, and upload prekeys and topic keys.
      
-     - Parameter user: The name of the user.
+     - Parameter userName: The name of the user.
      - Parameter pin: The pin given by the server administrator.
      - Parameter completion: A closure called when the request is finished.
      - Parameter result: The created device connection, or an error.
      */
-    public func register(user: String, using pin: Int, onError: @escaping (_ error: RendezvousError) -> Void, onSuccess: @escaping (_ device: Device) -> Void) {
+    public func register(user userName: String, using pin: Int, onError: @escaping (_ error: RendezvousError) -> Void, onSuccess: @escaping (_ device: Device) -> Void) {
         
         catching(onError: onError) {
             // Create a new identity key pair
@@ -64,7 +64,7 @@ public class Server {
             // Create topic keys
             let topicKeys = try Crypto.createTopicKeys(count: 50, for: userKey)
             
-            let user = try create(user: user, userKey: userKey, deviceKey: deviceKey)
+            let user = try create(user: userName, userKey: userKey, deviceKey: deviceKey)
             
             let object = RV_RegistrationBundle.with {
                 $0.info = user
@@ -80,6 +80,7 @@ public class Server {
                     throw RendezvousError.invalidServerData
                 }
                 let connection = Device(
+                    name: userName,
                     url: self.url,
                     userKey: userKey,
                     info: user,

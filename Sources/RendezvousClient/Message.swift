@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import CryptoKit25519
 
 public struct Message {
     
