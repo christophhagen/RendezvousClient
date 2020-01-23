@@ -14,10 +14,9 @@ enum Constants {
 }
 
 public class Server {
-    
-    
+
     /// The server url
-    let url: URL
+    public let url: URL
     
     
     init(url: URL) {
