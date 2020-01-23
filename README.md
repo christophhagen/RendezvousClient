@@ -20,10 +20,10 @@ THIS CODE IS STILL UNDER HEAVY DEVELOPMENT. DRASTIC CHANGES TO THE API CAN BE EX
 - Upload messages
 - Download messages and topic updates
 - Verify topic chains
+- Persisting data
 
 ## Missing features
 
-- Persisting data
 - Downloading files
 - Push notifications
 - Setup for additional devices
