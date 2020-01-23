@@ -21,14 +21,11 @@ public protocol DeviceDelegate: class {
     
     func device(receivedMessage message: Message, in topic: Topic, verified: Bool)
     
-    func device(foundInvalidChain index: Int, in topic: Topic)
+    func device(foundInvalidChain index: UInt32, in topic: Topic)
 }
 
 public final class Device: Server {
     
-    /// The name of the user.
-    public let userName: String
-
     /// The private identity key of the user
     let userPrivateKey: SigningPrivateKey
     
@@ -42,34 +39,38 @@ public final class Device: Server {
     public let deviceKey: SigningPublicKey
     
     /// Info about the user and the devices
-    private var object: RV_InternalUser
+    private var userInfo: RV_InternalUser
     
+    /// The authentication token for the server
     let authToken: Data
     
-    var preKeys = [EncryptionKeyPair]()
+    /// The list of unused prekeys
+    var preKeys: [EncryptionKeyPair]
     
-    var topicKeys = [Topic.Keys]()
+    /// The list of unused topic keys
+    var topicKeys: [Topic.Keys]
     
-    var topics = [Data : Topic]()
+    /// All currently existing topics with their info, indexed by their id
+    var topics: [Data : Topic]
     
     public weak var delegate: DeviceDelegate?
     
     // MARK: Computed properties
     
     public var created: Date {
-        .init(seconds: object.creationTime)
+        .init(seconds: userInfo.creationTime)
     }
     
     public var name: String {
-        object.name
+        userInfo.name
     }
     
     public var changed: Date {
-        .init(seconds: object.timestamp)
+        .init(seconds: userInfo.timestamp)
     }
     
     public var devices: [DeviceInfo] {
-        try! object.devices.map(DeviceInfo.init)
+        try! userInfo.devices.map(DeviceInfo.init)
     }
     
     // MARK: Initialization
@@ -77,14 +78,16 @@ public final class Device: Server {
     /**
      Create a device.
      */
-    init(name: String, url: URL, userKey: SigningPrivateKey, info: RV_InternalUser,  deviceKey: SigningPrivateKey, authToken: Data) {
+    init(url: URL, userKey: SigningPrivateKey, info: RV_InternalUser,  deviceKey: SigningPrivateKey, authToken: Data) {
         self.devicePrivateKey = deviceKey
         self.deviceKey = deviceKey.publicKey
         self.authToken = authToken
         self.userPrivateKey = userKey
         self.userKey = userKey.publicKey
-        self.object = info
-        self.userName = name
+        self.userInfo = info
+        self.preKeys = []
+        self.topicKeys = []
+        self.topics = [:]
         super.init(url: url)
         
     }
@@ -190,7 +193,7 @@ public final class Device: Server {
      - Parameter onSuccess: A closure called with the topic if the request succeeds.
      - Parameter topic: The resulting topic
      */
-    public func createTopic(with members: [(SigningPublicKey, Topic.Role)], onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ topic: Topic) -> Void) {
+    public func createTopic(with members: [(SigningPublicKey, Topic.Member.Role)], onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ topic: Topic) -> Void) {
         
         let request = RV_TopicKeyRequest.with {
             $0.publicKey = userKey.rawRepresentation
@@ -207,7 +210,7 @@ public final class Device: Server {
         upload(data, to: "users/topickey", onError: onError) { data in
             let keys = try Topic.Key.from(data: data)
             // Here we ignore all members which don't have a topic key at the moment.
-            let memberData = keys.compactMap { key -> (role: Topic.Role, key: Topic.Key)? in
+            let memberData = keys.compactMap { key -> (role: Topic.Member.Role, key: Topic.Key)? in
                 // Check that topic key belongs to a member of the group
                 guard let role = members.first(where: { $0.0 == key.userKey })?.1 else {
                     return nil
@@ -362,30 +365,30 @@ public final class Device: Server {
     // MARK: User info
     
     func update(info: RV_InternalUser) throws {
-        guard info.timestamp > object.timestamp else {
+        guard info.timestamp > userInfo.timestamp else {
             throw RendezvousError.requestOutdated
         }
-        let signatureKey = try SigningPublicKey(rawRepresentation: object.publicKey)
+        let signatureKey = try SigningPublicKey(rawRepresentation: userInfo.publicKey)
         try info.isFreshAndSigned(with: signatureKey)
         
-        guard info.publicKey == object.publicKey else {
+        guard info.publicKey == userInfo.publicKey else {
             throw RendezvousError.invalidServerData
         }
-        guard info.name == object.name,
-            info.creationTime == object.creationTime,
+        guard info.name == userInfo.name,
+            info.creationTime == userInfo.creationTime,
             info.devices.isSorted(by: { $0.creationTime }) else {
                 // If we reach this point, then one of the users devices messed up
                 // by creating an invalid info, and the server somehow didn't catch it.
                 throw RendezvousError.invalidServerData
         }
         guard let delegate = delegate else {
-            self.object = info
+            self.userInfo = info
             return
         }
 
         // Find new and changed devices
         for device in info.devices {
-            guard let old = object.devices.first(where: { $0.deviceKey == device.deviceKey }) else {
+            guard let old = userInfo.devices.first(where: { $0.deviceKey == device.deviceKey }) else {
                 // Device is new
                 delegate.user(addedDevice: try DeviceInfo(object: device))
                 continue
@@ -396,19 +399,19 @@ public final class Device: Server {
             }
         }
         // Find deleted devices {
-        for device in object.devices {
+        for device in userInfo.devices {
             if !info.devices.contains(where: { $0.deviceKey == device.deviceKey }) {
                 delegate.user(removedDevice: try DeviceInfo(object: device))
             }
         }
 
-        self.object = info
+        self.userInfo = info
     }
     
     // MARK: Keys
 
     func makeTopicKeys(fromPreKeys preKeys: RV_DevicePreKeyBundle) throws -> (topicKeys: [Topic.Keys], messages: [RV_TopicKeyMessageList]) {
-        var existingDevices = Set(object.devices.map { $0.deviceKey })
+        var existingDevices = Set(userInfo.devices.map { $0.deviceKey })
         let count = Int(preKeys.keyCount)
         
         // Create the topic keys
@@ -525,7 +528,7 @@ public final class Device: Server {
         
         let message = Message(object: message, metadata: metadata, sender: sender.userKey)
         // See if the topic state can be verified.
-        guard message.index == topic.verifiedIndex else {
+        guard message.nextChainIndex == topic.nextChainIndex else {
             // Message is not the next expected one, so mark as pending
             // and download other messages
             topic.unverifiedMessages.append(message)
@@ -539,11 +542,74 @@ public final class Device: Server {
             // Invalid chain. This implies an inconsistency in the message chain,
             // which could indicate that the server is attempting to tamper with
             // the messages
-            delegate?.device(foundInvalidChain: message.index, in: topic)
+            delegate?.device(foundInvalidChain: message.nextChainIndex, in: topic)
             return
         }
-        topic.verifiedIndex = message.index
+        topic.nextChainIndex = message.nextChainIndex
         topic.verifiedOutput = output
         delegate?.device(receivedMessage: message, in: topic, verified: true)
     }
+    
+    // MARK: Serialization
+    
+    var object: RV_ClientData {
+        return .with {
+            $0.userPrivateKey = userPrivateKey.rawRepresentation
+            $0.devicePrivateKey = devicePrivateKey.rawRepresentation
+            $0.devicePublicKey = deviceKey.rawRepresentation
+            $0.userInfo = userInfo
+            $0.authToken = authToken
+            $0.prekeys = preKeys.map { key in
+                RV_ClientData.KeyPair.with { pair in
+                    pair.privateKey = key.private.rawRepresentation
+                    pair.publicKey = key.public.rawRepresentation
+                }
+            }
+            $0.topicKeys = topicKeys.map { $0.object }
+            $0.topics = topics.values.map { $0.object }
+        }
+    }
+    
+    /// The serialized data of the device, including all topics and keys.
+    public var data: Data? {
+        return try? object.serializedData()
+    }
+    
+    /**
+     Create the device from serialized data.
+     */
+    public convenience init(data: Data) throws {
+        let object = try RV_ClientData(serializedData: data)
+        try self.init(object: object)
+    }
+    
+    init(object: RV_ClientData) throws {
+        self.userPrivateKey = try SigningPrivateKey(rawRepresentation: object.userPrivateKey)
+        let userKey =  try SigningPublicKey(rawRepresentation: object.userInfo.publicKey)
+        self.userKey = userKey
+        self.devicePrivateKey = try SigningPrivateKey(rawRepresentation: object.devicePrivateKey)
+        self.deviceKey = try SigningPublicKey(rawRepresentation: object.devicePublicKey)
+        self.userInfo = object.userInfo
+        self.authToken = object.authToken
+        guard let url = URL(string: object.serverURL) else {
+            throw RendezvousError.serializationFailed
+        }
+        self.preKeys = try object.prekeys.map { key in
+            let priv = try EncryptionPrivateKey(rawRepresentation: key.privateKey)
+            let pub = try EncryptionPublicKey(rawRepresentation: key.publicKey)
+            return (priv, pub)
+        }
+        self.topicKeys = try object.topicKeys.map {
+            try Topic.Keys(object: $0, userKey: userKey)
+        }
+        var topics = [Data : Topic]()
+        try object.topics.forEach {
+            let topic = try Topic.init(object: $0)
+            topics[topic.id] = topic
+        }
+        self.topics = topics
+        super.init(url: url)
+    }
+    
+    
 }

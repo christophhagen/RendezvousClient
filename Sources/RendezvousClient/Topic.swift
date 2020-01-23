@@ -10,6 +10,8 @@ import CryptoKit
 
 public class Topic {
     
+    // MARK: Variables
+    
     /// The unique id of the topic
     public let id: Data
     
@@ -31,13 +33,97 @@ public class Topic {
     /// The key used to decrypt topic key messages
     public let encryptionKey: EncryptionPrivateKey
     
-    /// The last message index which could be verified
-    internal(set) public var verifiedIndex: Int
+    /// The next message index expected in the chain
+    internal(set) public var nextChainIndex: UInt32
     
     /// The last output which could be verified.
     internal(set) public var verifiedOutput: Data
     
+    /// All messages which couldn't be verified yet.
     internal(set) public var unverifiedMessages: [Message]
+    
+    // MARK: Initialization
+    
+    init(selfCreatedTopic topic: RV_Topic, withTopicKey topicKey: Keys, messageKey: SymmetricKey) throws {
+        self.id = topic.topicID
+        self.created = Date(seconds: topic.creationTime)
+        self.modified = Date(seconds: topic.timestamp)
+        self.messageKey = messageKey
+        self.members = try topic.members.map(Member.init)
+        self.signatureKey = topicKey.signing
+        self.encryptionKey = topicKey.encryption
+        self.nextChainIndex = 0
+        self.verifiedOutput = topic.topicID
+        self.unverifiedMessages = []
+    }
+    
+    init(newTopic topic: RV_Topic, withTopicKey topicKey: Keys) throws {
+        let ownKey = topicKey.publicKeys.userKey.rawRepresentation
+        guard let message = topic.members.first(where: { $0.info.userKey == ownKey }) else {
+            throw RendezvousError.unknownError
+        }
+        guard message.signatureKey == topicKey.publicKeys.signatureKey.rawRepresentation,
+            message.info.encryptionKey == topicKey.publicKeys.encryptionKey.rawRepresentation else {
+                throw RendezvousError.invalidRequest
+        }
+        let data = message.signatureKey + message.info.encryptionKey
+        guard topicKey.publicKeys.userKey.isValidSignature(message.info.signature, for: data) else {
+            throw RendezvousError.invalidSignature
+        }
+        // Decrypt the message key
+        let decrypted = try Crypto.decrypt(message.encryptedMessageKey, using: topicKey.encryption)
+        guard decrypted.count == Crypto.messageKeyLength, topic.topicID.count == Crypto.topicIdLength else {
+            throw RendezvousError.unknownError
+        }
+        self.id = topic.topicID
+        self.created = Date(seconds: topic.creationTime)
+        self.modified = Date(seconds: topic.timestamp)
+        self.messageKey = SymmetricKey(data: decrypted)
+        self.members = try topic.members.map(Member.init)
+        self.signatureKey = topicKey.signing
+        self.encryptionKey = topicKey.encryption
+        self.nextChainIndex = 0
+        self.verifiedOutput = topic.topicID
+        self.unverifiedMessages = []
+    }
+    
+    // MARK: Storage
+    
+    init(object: RV_ClientData.TopicStore) throws {
+        self.id = object.info.topicID
+        self.created = Date(seconds: object.info.creationTime)
+        self.modified = Date(seconds: object.info.timestamp)
+        self.members = try object.info.members.map(Member.init)
+        self.messageKey = SymmetricKey(data: object.messageKey)
+        self.nextChainIndex = object.nextChainIndex
+        self.verifiedOutput = object.verifiedOutput
+        self.unverifiedMessages = try object.unverifiedMessages.map(Message.init)
+        self.signatureKey = try SigningPrivateKey(rawRepresentation: object.signatureKey)
+        self.encryptionKey = try EncryptionPrivateKey(rawRepresentation: object.encryptionKey)
+    }
+    
+    var object: RV_ClientData.TopicStore {
+        return .with {
+            $0.info = topicObject
+            $0.messageKey = messageKey.rawRepresentation
+            $0.nextChainIndex = nextChainIndex
+            $0.verifiedOutput = verifiedOutput
+            $0.unverifiedMessages = unverifiedMessages.map { $0.object }
+            $0.signatureKey = signatureKey.rawRepresentation
+            $0.encryptionKey = encryptionKey.rawRepresentation
+        }
+    }
+    
+    private var topicObject: RV_Topic {
+        .with {
+            $0.topicID = id
+            $0.creationTime = created.seconds
+            $0.timestamp = modified.seconds
+            $0.members = members.map { $0.object }
+        }
+    }
+    
+    // MARK: Members
     
     /// A member of a topic
     public struct Member {
@@ -65,80 +151,48 @@ public class Topic {
             self.encryptionKey = try EncryptionPublicKey(rawRepresentation: member.info.encryptionKey)
             self.role = try Role(raw: member.role)
         }
-    }
-    
-    init(selfCreatedTopic topic: RV_Topic, withTopicKey topicKey: Keys, messageKey: SymmetricKey) throws {
-        self.id = topic.topicID
-        self.created = Date(seconds: topic.creationTime)
-        self.modified = Date(seconds: topic.timestamp)
-        self.messageKey = messageKey
-        self.members = try topic.members.map(Member.init)
-        self.signatureKey = topicKey.signing
-        self.encryptionKey = topicKey.encryption
-        self.verifiedIndex = 0
-        self.verifiedOutput = topic.topicID
-        self.unverifiedMessages = []
-    }
-    
-    init(newTopic topic: RV_Topic, withTopicKey topicKey: Keys) throws {
-        let ownKey = topicKey.publicKeys.userKey.rawRepresentation
-        guard let message = topic.members.first(where: { $0.info.userKey == ownKey} ) else {
-            throw RendezvousError.unknownError
-        }
-        guard message.signatureKey == topicKey.publicKeys.signatureKey.rawRepresentation,
-            message.info.encryptionKey == topicKey.publicKeys.encryptionKey.rawRepresentation else {
-                throw RendezvousError.invalidRequest
-        }
-        let data = message.signatureKey + message.info.encryptionKey
-        guard topicKey.publicKeys.userKey.isValidSignature(message.info.signature, for: data) else {
-            throw RendezvousError.invalidSignature
-        }
-        // Decrypt the message key
-        let decrypted = try Crypto.decrypt(message.encryptedMessageKey, using: topicKey.encryption)
-        guard decrypted.count == Crypto.messageKeyLength, topic.topicID.count == Crypto.topicIdLength else {
-            throw RendezvousError.unknownError
-        }
-        self.id = topic.topicID
-        self.created = Date(seconds: topic.creationTime)
-        self.modified = Date(seconds: topic.timestamp)
-        self.messageKey = SymmetricKey(data: decrypted)
-        self.members = try topic.members.map(Member.init)
-        self.signatureKey = topicKey.signing
-        self.encryptionKey = topicKey.encryption
-        self.verifiedIndex = 0
-        self.verifiedOutput = topic.topicID
-        self.unverifiedMessages = []
-    }
-    
-    public enum Role {
         
-        /// Admins are allowed to add and remove users, and read and write messages
-        case admin
-        
-        /// Participants are allowed to read and write messages
-        case participant
-        
-        /// Observers are allowed to read messages
-        case observer
-        
-        var raw: RV_Topic.MemberInfo.Role {
-            switch self {
-            case .admin: return .admin
-            case .participant: return .participant
-            case .observer: return .observer
+        var object: RV_Topic.MemberInfo {
+            .with {
+                $0.signatureKey = signatureKey.rawRepresentation
+                $0.role = role.raw
             }
         }
         
-        init(raw: RV_Topic.MemberInfo.Role) throws {
-            switch raw {
-            case .admin: self = .admin
-            case .participant: self = .participant
-            case .observer: self = .observer
-            default:
-                throw RendezvousError.unknownError
+        // MARK: Roles
+
+        public enum Role {
+            
+            /// Admins are allowed to add and remove users, and read and write messages
+            case admin
+            
+            /// Participants are allowed to read and write messages
+            case participant
+            
+            /// Observers are allowed to read messages
+            case observer
+            
+            var raw: RV_Topic.MemberInfo.Role {
+                switch self {
+                case .admin: return .admin
+                case .participant: return .participant
+                case .observer: return .observer
+                }
+            }
+            
+            init(raw: RV_Topic.MemberInfo.Role) throws {
+                switch raw {
+                case .admin: self = .admin
+                case .participant: self = .participant
+                case .observer: self = .observer
+                default:
+                    throw RendezvousError.unknownError
+                }
             }
         }
     }
+    
+    // MARK: Private topic keys
     
     struct Keys {
         
@@ -183,6 +237,26 @@ public class Topic {
             self.publicKeys = topicKey
         }
         
+        init(object: RV_ClientData.TopicKeyPair, userKey: SigningPublicKey) throws {
+            self.signing = try SigningPrivateKey(rawRepresentation: object.signing.privateKey)
+            self.encryption = try EncryptionPrivateKey(rawRepresentation: object.encryption.privateKey)
+            self.publicKeys = try .init(object: object, userKey: userKey)
+        }
+        
+        var object: RV_ClientData.TopicKeyPair {
+            return .with { key in
+                key.signing = .with {
+                    $0.privateKey = signing.rawRepresentation
+                    $0.publicKey = publicKeys.signatureKey.rawRepresentation
+                }
+                key.encryption = .with {
+                    $0.privateKey = encryption.rawRepresentation
+                    $0.publicKey = publicKeys.encryptionKey.rawRepresentation
+                }
+                key.signature = publicKeys.signature
+            }
+        }
+        
         func message(withPrekey key: RV_DevicePrekey) throws -> RV_TopicKeyMessage {
             return try .with { message in
                 message.devicePreKey = key.preKey
@@ -193,6 +267,8 @@ public class Topic {
             }
         }
     }
+    
+    // MARK: Public topic keys
     
     struct Key {
         
@@ -235,6 +311,13 @@ public class Topic {
             self.signature = object.signature
         }
         
+        init(object: RV_ClientData.TopicKeyPair, userKey: SigningPublicKey) throws {
+            self.signatureKey = try SigningPublicKey(rawRepresentation: object.signing.publicKey)
+            self.encryptionKey = try EncryptionPublicKey(rawRepresentation: object.encryption.privateKey)
+            self.signature = object.signature
+            self.userKey = userKey
+        }
+        
         init(data: Data, userKey: SigningPublicKey) throws {
             let object: RV_TopicKey
             do {
@@ -245,7 +328,7 @@ public class Topic {
             try self.init(object: object, userKey: userKey)
         }
         
-        func encrypt(_ data: Data, role: Topic.Role) throws -> RV_Topic.MemberInfo {
+        func encrypt(_ data: Data, role: Topic.Member.Role) throws -> RV_Topic.MemberInfo {
             try .with { message in
                 message.signatureKey = signatureKey.rawRepresentation
                 message.role = role.raw

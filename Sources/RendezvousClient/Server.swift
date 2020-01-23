@@ -80,7 +80,6 @@ public class Server {
                     throw RendezvousError.invalidServerData
                 }
                 let connection = Device(
-                    name: userName,
                     url: self.url,
                     userKey: userKey,
                     info: user,
