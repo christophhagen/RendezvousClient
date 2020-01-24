@@ -194,7 +194,7 @@ final class AdminTests: XCTestCase {
         
         let e = self.expectation(description: #function)
         var topic: Topic? = nil
-        alice.createTopic(with: [(bob.userKey, Topic.Role.admin)], onError: { error in
+        alice.createTopic(with: [(bob.userKey, Topic.Member.Role.admin)], onError: { error in
             XCTFail("\(error)")
             e.fulfill()
         }) { newTopic in
@@ -252,7 +252,7 @@ final class AdminTests: XCTestCase {
             return
         }
         XCTAssertEqual(message.metadata, self.metadata)
-        XCTAssertEqual(message.index, 0)
+        XCTAssertEqual(message.nextChainIndex, 0)
         XCTAssertTrue(delegate.verified)
     }
 }

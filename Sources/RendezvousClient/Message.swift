@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 public struct Message {
     
@@ -68,5 +69,9 @@ public struct Message {
                 chain.output = output
             }
         }
+    }
+    
+    public static func newMessageID() -> Data {
+        AES.GCM.Nonce().rawRepresentation
     }
 }
