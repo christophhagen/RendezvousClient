@@ -9,7 +9,7 @@ final class AdminTests: XCTestCase {
         ("testAdminTokenUpdate", testAdminTokenUpdate),
     ]
     
-    let server = Admin(server: url)
+    let server = Admin(server: url, appId: "Rendezvous".data(using: .utf8)!)
     
     let user = "Alice"
     
@@ -252,7 +252,7 @@ final class AdminTests: XCTestCase {
             return
         }
         XCTAssertEqual(message.metadata, self.metadata)
-        XCTAssertEqual(message.nextChainIndex, 0)
+        XCTAssertEqual(message.nextChainIndex, 1)
         XCTAssertTrue(delegate.verified)
     }
 }

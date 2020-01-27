@@ -15,13 +15,13 @@ public struct DeviceInfo {
     
     public let isActive: Bool
 
-    init(object: RV_UserDevice) throws {
+    init(object: RV_InternalUser.Device) throws {
         self.publicKey = try .init(rawRepresentation: object.deviceKey)
         self.created = Date(seconds: object.creationTime)
         self.isActive = object.isActive
     }
     
-    var object: RV_UserDevice {
+    var object: RV_InternalUser.Device {
         .with {
             $0.deviceKey = publicKey.rawRepresentation
             $0.creationTime = created.seconds

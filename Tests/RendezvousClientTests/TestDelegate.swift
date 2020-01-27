@@ -60,7 +60,7 @@ final class TestDelegate: DeviceDelegate {
         decrement()
     }
     
-    func device(foundInvalidChain index: Int, in topic: Topic) {
+    func device(foundInvalidChain index: UInt32, in topic: Topic) {
         XCTFail("Invalid chain \(index)")
         decrement()
     }

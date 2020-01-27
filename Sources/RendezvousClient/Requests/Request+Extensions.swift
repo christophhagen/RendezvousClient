@@ -10,6 +10,10 @@ import Alamofire
 
 extension HTTPHeaders {
     
+    mutating func add(appId: Data) {
+        add(binary: appId, for: .appId)
+    }
+    
     /**
      Add a count to the request.
     */

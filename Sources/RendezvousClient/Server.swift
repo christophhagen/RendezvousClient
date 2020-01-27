@@ -14,22 +14,32 @@ enum Constants {
 }
 
 public class Server {
+    
+    public static let appIdLength = 10
+    
+    public let appId: Data
 
     /// The server url
     public let url: URL
     
     
-    init(url: URL) {
+    init(url: URL, appId: Data) {
         self.url = url
+        self.appId = appId
     }
     
     /**
      Connect to a server.
      - Parameter url: The server url
+     - Parameter appId: The identifier for the application (`Server.appIdLength` bytes)
      - Parameter completion: A closure called when the request is completed.
      - Parameter server: The server instance, if the request is successful.
      */
-    public static func connect(to url: URL, completion: @escaping (_ server: Server?) -> Void) {
+    public static func connect(to url: URL, appId: Data, completion: @escaping (_ server: Server?) -> Void) {
+        guard appId.count == Server.appIdLength else {
+            completion(nil)
+            return
+        }
         let pingURL = url.appendingPathComponent("ping")
         #warning("Pin server certificate.")
         AF.request(pingURL).response { response in
@@ -37,7 +47,7 @@ public class Server {
                 completion(nil)
                 return
             }
-            let server = Server(url: url)
+            let server = Server(url: url, appId: appId)
             completion(server)
         }
     }
@@ -80,6 +90,7 @@ public class Server {
                 }
                 let connection = Device(
                     url: self.url,
+                    appId: self.appId,
                     userKey: userKey,
                     info: user,
                     deviceKey: deviceKey,
@@ -93,10 +104,11 @@ public class Server {
     
     private func create(user: String, userKey: SigningPrivateKey, deviceKey: SigningPrivateKey) throws -> RV_InternalUser {
         let now = Date.secondsNow
-        let device = RV_UserDevice.with {
+        let device = RV_InternalUser.Device.with {
             $0.deviceKey = deviceKey.publicKey.rawRepresentation
             $0.creationTime = now
             $0.isActive = true
+            $0.application = appId
         }
         
         var user = RV_InternalUser.with { info in

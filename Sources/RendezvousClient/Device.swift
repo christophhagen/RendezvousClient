@@ -78,7 +78,7 @@ public final class Device: Server {
     /**
      Create a device.
      */
-    init(url: URL, userKey: SigningPrivateKey, info: RV_InternalUser,  deviceKey: SigningPrivateKey, authToken: Data) {
+    init(url: URL, appId: Data, userKey: SigningPrivateKey, info: RV_InternalUser,  deviceKey: SigningPrivateKey, authToken: Data) {
         self.devicePrivateKey = deviceKey
         self.deviceKey = deviceKey.publicKey
         self.authToken = authToken
@@ -88,7 +88,7 @@ public final class Device: Server {
         self.preKeys = []
         self.topicKeys = []
         self.topics = [:]
-        super.init(url: url)
+        super.init(url: url, appId: appId)
         
     }
     
@@ -154,6 +154,7 @@ public final class Device: Server {
         // Create the headers
         var headers = authenticatedHeaders
         headers.add(count: count)
+        headers.add(appId: appId)
         
         // Make the request to download prekeys for each user
         download("user/prekeys", headers: headers, onError: onError) { data in
@@ -172,6 +173,7 @@ public final class Device: Server {
                 $0.deviceKey = key
                 $0.authToken = self.authToken
                 $0.topicKeys = keys
+                $0.application = self.appId
                 // Remove all messages which would go to the sending device
                 $0.messages = messages.filter { $0.deviceKey != key }
             }
@@ -200,6 +202,7 @@ public final class Device: Server {
             $0.deviceKey = deviceKey.rawRepresentation
             $0.authToken = authToken
             $0.users = members.map { $0.0.rawRepresentation }
+            $0.application = appId
         }
         guard let data = try? request.serializedData() else {
             onError(.serializationFailed)
@@ -231,6 +234,7 @@ public final class Device: Server {
                 t.members = try roles.map { role, key in
                     try key.encrypt(messageKey.rawRepresentation, role: role) }
                 t.timestamp = now
+                t.application = self.appId
             }
             
             try topic.sign(with: topicKey.signing)
@@ -355,6 +359,7 @@ public final class Device: Server {
         
         var headers = authenticatedHeaders
         headers.add(receiverKey: user)
+        headers.add(appId: appId)
         
         download("user/topickey", headers: headers, onError: onError) { data in
             let key = try Topic.Key(data: data, userKey: user)
@@ -528,7 +533,7 @@ public final class Device: Server {
         
         let message = Message(object: message, metadata: metadata, sender: sender.userKey)
         // See if the topic state can be verified.
-        guard message.nextChainIndex == topic.nextChainIndex else {
+        guard message.nextChainIndex == topic.nextChainIndex + 1 else {
             // Message is not the next expected one, so mark as pending
             // and download other messages
             topic.unverifiedMessages.append(message)
@@ -608,7 +613,7 @@ public final class Device: Server {
             topics[topic.id] = topic
         }
         self.topics = topics
-        super.init(url: url)
+        super.init(url: url, appId: object.appication)
     }
     
     
