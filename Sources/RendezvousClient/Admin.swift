@@ -22,11 +22,12 @@ public final class Admin: Server {
      Create an admin connection to a server.
      
      - Parameter url: The url to the server.
+     - Parameter appId: The id of the application.
      - Parameter token: The access token (defaults to an empty token)
      - Note: When a server is initally created, the default token is set.
      - Warning: New servers should be updated immediately with the `updateAdminToken(completion:)` function.
      */
-    public init(server url: URL, appId: Data, token: Data = Admin.defaultAdminToken) {
+    public init(server url: URL, appId: String, token: Data = Admin.defaultAdminToken) {
         self.adminToken = token
         super.init(url: url, appId: appId)
     }

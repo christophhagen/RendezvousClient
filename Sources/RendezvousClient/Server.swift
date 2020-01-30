@@ -17,13 +17,13 @@ public class Server {
     
     public static let appIdLength = 10
     
-    public let appId: Data
+    public let appId: String
 
     /// The server url
     public let url: URL
     
     
-    init(url: URL, appId: Data) {
+    init(url: URL, appId: String) {
         self.url = url
         self.appId = appId
     }
@@ -35,7 +35,7 @@ public class Server {
      - Parameter completion: A closure called when the request is completed.
      - Parameter server: The server instance, if the request is successful.
      */
-    public static func connect(to url: URL, appId: Data, completion: @escaping (_ server: Server?) -> Void) {
+    public static func connect(to url: URL, appId: String, completion: @escaping (_ server: Server?) -> Void) {
         guard appId.count == Server.appIdLength else {
             completion(nil)
             return

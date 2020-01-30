@@ -78,7 +78,7 @@ public final class Device: Server {
     /**
      Create a device.
      */
-    init(url: URL, appId: Data, userKey: SigningPrivateKey, info: RV_InternalUser,  deviceKey: SigningPrivateKey, authToken: Data) {
+    init(url: URL, appId: String, userKey: SigningPrivateKey, info: RV_InternalUser,  deviceKey: SigningPrivateKey, authToken: Data) {
         self.devicePrivateKey = deviceKey
         self.deviceKey = deviceKey.publicKey
         self.authToken = authToken
