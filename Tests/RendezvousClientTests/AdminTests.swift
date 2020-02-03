@@ -20,6 +20,7 @@ final class AdminTests: XCTestCase {
     let metadata = Data(repeating: 42, count: 42)
 
     override func setUp() {
+        self.continueAfterFailure = false
         resetServer()
     }
     
@@ -279,5 +280,26 @@ final class AdminTests: XCTestCase {
         }
         
         self.wait(for: [e], timeout: 10)
+    }
+    
+    func testReceipts() {
+        guard let data = receiveMessage() else {
+            return
+        }
+        let delegate = TestDelegate()
+        data.alice.delegate = delegate
+        // Expect receipt
+        delegate.set(expectation: self.expectation(description: #function))
+        let e = self.expectation(description: #function + "2")
+        data.alice.getMessages(onError: { error in
+            XCTFail("\(error)")
+            e.fulfill()
+        }) {
+            e.fulfill()
+        }
+        self.wait(for: [delegate.expectation!, e], timeout: 10)
+        XCTAssertEqual(delegate.receipts.count, 1)
+        XCTAssertEqual(delegate.receipts[0], messageId)
+        
     }
 }

@@ -16,6 +16,7 @@ final class TestDelegate: DeviceDelegate {
         topic = nil
         message = nil
         verified = false
+        receipts.removeAll()
         self.count = count
     }
     
@@ -26,6 +27,8 @@ final class TestDelegate: DeviceDelegate {
     var topic: Topic?
     
     var message: Message?
+    
+    var receipts = [MessageID]()
     
     var verified: Bool = false
     
@@ -57,6 +60,11 @@ final class TestDelegate: DeviceDelegate {
     func device(receivedMessage message: Message, in topic: Topic, verified: Bool) {
         self.message = message
         self.verified = verified
+        decrement()
+    }
+    
+    func device(receivedReceipts receipts: [MessageID], from sender: SigningPublicKey) {
+        self.receipts.append(contentsOf: receipts)
         decrement()
     }
     

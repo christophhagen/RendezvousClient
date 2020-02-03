@@ -21,6 +21,8 @@ public protocol DeviceDelegate: class {
     
     func device(receivedMessage message: Message, in topic: Topic, verified: Bool)
     
+    func device(receivedReceipts receipts: [MessageID], from sender: SigningPublicKey)
+    
     func device(foundInvalidChain index: UInt32, in topic: Topic)
 }
 
@@ -328,6 +330,7 @@ public final class Device: Server {
             try self.decrypt(topicKeyMessages: object.topicKeyMessages)
             try self.received(topicUpdates: object.topicUpdates)
             try self.decrypt(messages: object.messages)
+            try self.process(receipts: object.receipts)
             onSuccess()
         }
     }
@@ -593,6 +596,16 @@ public final class Device: Server {
         topic.nextChainIndex = message.nextChainIndex
         topic.verifiedOutput = output
         delegate?.device(receivedMessage: message, in: topic, verified: true)
+    }
+    
+    private func process(receipts: [RV_DeviceDownload.Receipt]) {
+        for receipt in receipts {
+            guard let sender = try? SigningPublicKey(rawRepresentation: receipt.sender) else {
+                continue
+            }
+            let ids = receipt.ids.filter { $0.count == Constants.messageIdLength }
+            delegate?.device(receivedReceipts: ids, from: sender)
+        }
     }
     
     // MARK: Serialization
