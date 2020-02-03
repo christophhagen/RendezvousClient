@@ -21,11 +21,11 @@ THIS CODE IS STILL UNDER HEAVY DEVELOPMENT. DRASTIC CHANGES TO THE API CAN BE EX
 - Download messages and topic updates
 - Verify topic chains
 - Persisting data
+- Downloading files
+- Delivery receipts
 
 ## Missing features
 
-- Downloading files
 - Push notifications
 - Setup for additional devices
 - Background downloads and uploads
-- Proper API
