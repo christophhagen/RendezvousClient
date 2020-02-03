@@ -1,10 +1,12 @@
 # RendezvousClient
 
-A client to interact with `Rendezvous` servers ([Server Code](https:/github.com/christophhagen/RendezvousServer)).
+A client to interact with [Rendezvous](https:/github.com/christophhagen/RendezvousServer) servers.
 
 ## Important Note
 
-THIS CODE IS STILL UNDER HEAVY DEVELOPMENT. DRASTIC CHANGES TO THE API CAN BE EXPECTED, AND MANY FEATURES ARE STILL MISSING
+This is a private project, and as such you should be careful using this code.
+
+THIS CODE IS STILL UNDER HEAVY DEVELOPMENT. DRASTIC CHANGES TO THE API CAN BE EXPECTED, AND MANY FEATURES ARE STILL MISSING. USE WITH CARE.
 
 ## Working features
 
