@@ -8,14 +8,22 @@
 import Foundation
 import Alamofire
 
-enum Constants {
-    
-    static let authTokenLength = 16
-}
+/// The public identity key of a device
+public typealias DeviceKey = Data
+
+/// The public identity key of a user
+public typealias UserKey = Data
+
+/// The id of a topic
+public typealias TopicID = Data
+
+/// The id of a message
+public typealias MessageID = Data
+
+/// An authentication token
+public typealias AuthToken = Data
 
 public class Server {
-    
-    public static let appIdLength = 10
     
     public let appId: String
 
@@ -36,7 +44,7 @@ public class Server {
      - Parameter server: The server instance, if the request is successful.
      */
     public static func connect(to url: URL, appId: String, completion: @escaping (_ server: Server?) -> Void) {
-        guard appId.count == Server.appIdLength else {
+        guard appId.count <= Constants.maximumAppIdLength else {
             completion(nil)
             return
         }

@@ -11,12 +11,12 @@ import Alamofire
 public final class Admin: Server {
     
     /// The default admin token when setting up a new server.
-    public static var defaultAdminToken: Data {
+    public static var defaultAdminToken: AuthToken {
         Data(repeating: 0, count: Constants.authTokenLength)
     }
     
     /// The administrator token
-    private(set) public var adminToken: Data
+    private(set) public var adminToken: AuthToken
     
     /**
      Create an admin connection to a server.
@@ -27,7 +27,10 @@ public final class Admin: Server {
      - Note: When a server is initally created, the default token is set.
      - Warning: New servers should be updated immediately with the `updateAdminToken(completion:)` function.
      */
-    public init(server url: URL, appId: String, token: Data = Admin.defaultAdminToken) {
+    public init?(server url: URL, appId: String, token: AuthToken = Admin.defaultAdminToken) {
+        guard token.count == Constants.authTokenLength else {
+            return nil
+        }
         self.adminToken = token
         super.init(url: url, appId: appId)
     }
@@ -87,7 +90,7 @@ public final class Admin: Server {
         var headers = authTokenHeaders
         headers.add(user: user)
         
-        upload(to: "user/allow", headers: headers, onError: onError) { data in
+        upload(to: "admin/allow", headers: headers, onError: onError) { data in
             guard let object = try? RV_AllowedUser(serializedData: data) else {
                 throw RendezvousError.invalidServerData
             }

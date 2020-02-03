@@ -9,9 +9,11 @@ final class AdminTests: XCTestCase {
         ("testAdminTokenUpdate", testAdminTokenUpdate),
     ]
     
-    let server = Admin(server: url, appId: "Rendezvous".data(using: .utf8)!)
+    let server = Admin(server: url, appId: "Rendezvous")!
     
     let user = "Alice"
+    
+    let messageId = Data(repeating: 8, count: Constants.messageIdLength)
     
     let message = Data(repeating: 42, count: 250)
     
@@ -217,7 +219,7 @@ final class AdminTests: XCTestCase {
             return nil
         }
         let e = self.expectation(description: #function)
-        data.alice.upload(message: message, metadata: metadata, to: data.topic, onError: { error in
+        data.alice.upload(message: messageId, data: message, metadata: metadata, to: data.topic, onError: { error in
             XCTFail("\(error)")
             e.fulfill()
         }) { chain in
@@ -231,9 +233,10 @@ final class AdminTests: XCTestCase {
     func testUploadMessage() {
         _ = uploadMessage()
     }
-    func testReceiveMessage() {
+    
+    func receiveMessage() -> (alice: Device, bob: Device, topic: Topic, message: Message)? {
         guard let data = uploadMessage() else {
-            return
+            return nil
         }
         let delegate = TestDelegate()
         data.bob.delegate = delegate
@@ -249,10 +252,32 @@ final class AdminTests: XCTestCase {
         self.wait(for: [delegate.expectation!, e], timeout: 10)
         guard let message = delegate.message else {
             XCTFail("No message")
-            return
+            return nil
         }
         XCTAssertEqual(message.metadata, self.metadata)
         XCTAssertEqual(message.nextChainIndex, 1)
         XCTAssertTrue(delegate.verified)
+        return (data.alice, data.bob, data.topic, message)
+    }
+    
+    func testReceiveMessage() {
+        _ = receiveMessage()
+    }
+    
+    func testDownloadFile() {
+        guard let data = receiveMessage() else {
+            return
+        }
+        
+        let e = self.expectation(description: #function)
+        data.bob.getFile(data.message, in: data.topic, onError: { error in
+            XCTFail("\(error)")
+            e.fulfill()
+        }) { data in
+            XCTAssertEqual(data, self.message)
+            e.fulfill()
+        }
+        
+        self.wait(for: [e], timeout: 10)
     }
 }

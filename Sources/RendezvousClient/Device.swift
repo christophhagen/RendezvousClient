@@ -42,7 +42,7 @@ public final class Device: Server {
     private var userInfo: RV_InternalUser
     
     /// The authentication token for the server
-    let authToken: Data
+    let authToken: AuthToken
     
     /// The list of unused prekeys
     var preKeys: [EncryptionKeyPair]
@@ -53,6 +53,7 @@ public final class Device: Server {
     /// All currently existing topics with their info, indexed by their id
     var topics: [Data : Topic]
     
+    /// The delegate receiving events
     public weak var delegate: DeviceDelegate?
     
     // MARK: Computed properties
@@ -71,6 +72,12 @@ public final class Device: Server {
     
     public var devices: [DeviceInfo] {
         try! userInfo.devices.map(DeviceInfo.init)
+    }
+    
+    /// The public keys of all user devices except the local one.
+    var otherDevices: Set<DeviceKey> {
+        let key = deviceKey.rawRepresentation
+        return Set(userInfo.devices.filter({ $0.deviceKey != key }).map { $0.deviceKey })
     }
     
     // MARK: Initialization
@@ -165,6 +172,7 @@ public final class Device: Server {
                 onSuccess(0)
                 return
             }
+            
             let (topicKeys, messages) = try self.makeTopicKeys(fromPreKeys: object)
             let keys = topicKeys.map { $0.publicKeys.object }
             let key = self.deviceKey.rawRepresentation
@@ -257,15 +265,20 @@ public final class Device: Server {
      - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
      - Parameter chain: The topic chain state after the message.
      */
-    public func upload(message: Data, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ chain: Chain) -> Void) {
+    public func upload(message: MessageID, data: Data, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ chain: Chain) -> Void) {
         catching(onError: onError) {
+            // Check that the message id is valid
+            guard message.count == Constants.messageIdLength else {
+                throw RendezvousError.invalidFile
+            }
             // Check that user is part of the group, and can write
             guard let index = topic.members.firstIndex(where: { $0.userKey == userKey }),
                 topic.members[index].role != .observer else {
                     throw RendezvousError.invalidRequest
             }
             // Encrypt the data
-            let encryptedMessage = try AES.GCM.seal(message, using: topic.messageKey)
+            let nonce = try AES.GCM.Nonce(data: message)
+            let encryptedMessage = try AES.GCM.seal(data, using: topic.messageKey, nonce: nonce)
             let encryptedMetadata = try AES.GCM.seal(metadata, using: topic.messageKey).combined!
             let hash = Crypto.sha256(of: encryptedMessage.ciphertext)
             
@@ -316,6 +329,33 @@ public final class Device: Server {
             try self.received(topicUpdates: object.topicUpdates)
             try self.decrypt(messages: object.messages)
             onSuccess()
+        }
+    }
+    
+    /**
+     Download the file data of a message.
+     
+     - Parameter message: The message to download.
+     - Parameter topic: The topic of the message.
+     - Parameter onError: A closure called if the request fails.
+     - Parameter onSuccess: A closure called with the file data if the request succeeds.
+     */
+    public func getFile(_ message: Message, in topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (Data) -> Void) {
+        
+        let path = "files/\(topic.id.url)/\(message.id.url)"
+        download(path, headers: authenticatedHeaders, onError: onError) { data in
+            let hash = SHA256.hash(data: data)
+            guard hash == message.hash else {
+                throw RendezvousError.invalidFile
+            }
+            do {
+                let nonce = try AES.GCM.Nonce(data: message.id)
+                let box = try AES.GCM.SealedBox(nonce: nonce, ciphertext: data, tag: message.tag)
+                let decrypted = try AES.GCM.open(box, using: topic.messageKey)
+                onSuccess(decrypted)
+            } catch {
+                onError(.invalidFile)
+            }
         }
     }
     
@@ -416,7 +456,6 @@ public final class Device: Server {
     // MARK: Keys
 
     func makeTopicKeys(fromPreKeys preKeys: RV_DevicePreKeyBundle) throws -> (topicKeys: [Topic.Keys], messages: [RV_TopicKeyMessageList]) {
-        var existingDevices = Set(userInfo.devices.map { $0.deviceKey })
         let count = Int(preKeys.keyCount)
         
         // Create the topic keys
@@ -425,6 +464,7 @@ public final class Device: Server {
         // Create the resulting message dictionary
         var messages = [Data : RV_TopicKeyMessageList]()
 
+        var existingDevices = otherDevices
         for list in preKeys.devices {
             // Check that the device exists in the list of devices
             guard let _ = existingDevices.remove(list.deviceKey) else {
@@ -609,7 +649,7 @@ public final class Device: Server {
         }
         var topics = [Data : Topic]()
         try object.topics.forEach {
-            let topic = try Topic.init(object: $0)
+            let topic = try Topic(object: $0)
             topics[topic.id] = topic
         }
         self.topics = topics
@@ -617,4 +657,29 @@ public final class Device: Server {
     }
     
     
+}
+
+private extension Data {
+    
+    /// Encodes data to a base64-url encoded string.
+    ///
+    /// https://tools.ietf.org/html/rfc4648#page-7
+    ///
+    /// - parameter options: The options to use for the encoding. Default value is `[]`.
+    /// - returns: The base64-url encoded string.
+    var url: String {
+        return base64EncodedString().base64URLEscaped()
+    }
+}
+
+private extension String {
+    
+    /// Converts a base64 encoded string to a base64-url encoded string.
+    ///
+    /// https://tools.ietf.org/html/rfc4648#page-7
+    func base64URLEscaped() -> String {
+        return replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
 }

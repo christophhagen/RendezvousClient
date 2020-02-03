@@ -13,7 +13,7 @@ public class Topic {
     // MARK: Variables
     
     /// The unique id of the topic
-    public let id: Data
+    public let id: TopicID
     
     /// The date when the topic was created
     public let created: Date

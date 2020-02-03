@@ -17,7 +17,7 @@ public struct Message {
     public let output: Data
     
     /// The id of the file
-    public let id: Data
+    public let id: MessageID
     
     /// The metadata of the file
     public let metadata: Data

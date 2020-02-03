@@ -32,7 +32,7 @@ extension HTTPHeaders {
      Add an authentication token.
      - Parameter authToken: The binary authentication token.
      */
-    mutating func add(authToken: Data) {
+    mutating func add(authToken: AuthToken) {
         add(binary: authToken, for: .authToken)
     }
     

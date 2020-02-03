@@ -24,6 +24,9 @@ public enum RendezvousError: Int, Error {
     /// Some request data could not be serialized
     case serializationFailed = 4
     
+    /// The downloaded file is invalid (hash mismatch, decryption/authentication failure)
+    case invalidFile = 5
+    
     // MARK: Server errors
     
     /// The request does not contain all necessary data, or some data is not properly formatted.
