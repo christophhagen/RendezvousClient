@@ -16,7 +16,7 @@ final class TestDelegate: DeviceDelegate {
         topic = nil
         message = nil
         verified = false
-        receipts.removeAll()
+        chainState = 0
         self.count = count
     }
     
@@ -26,9 +26,9 @@ final class TestDelegate: DeviceDelegate {
     
     var topic: Topic?
     
-    var message: Message?
+    var message: Update?
     
-    var receipts = [MessageID]()
+    var chainState: UInt32 = 0
     
     var verified: Bool = false
     
@@ -57,14 +57,14 @@ final class TestDelegate: DeviceDelegate {
         decrement()
     }
     
-    func device(receivedMessage message: Message, in topic: Topic, verified: Bool) {
+    func device(receivedMessage message: Update, in topic: Topic, verified: Bool) {
         self.message = message
         self.verified = verified
         decrement()
     }
     
-    func device(receivedReceipts receipts: [MessageID], from sender: SigningPublicKey) {
-        self.receipts.append(contentsOf: receipts)
+    func device(receivedChainState chainState: UInt32, for topic: TopicID, from sender: SigningPublicKey) {
+        self.chainState = chainState
         decrement()
     }
     

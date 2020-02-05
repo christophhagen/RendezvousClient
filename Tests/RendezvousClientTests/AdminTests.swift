@@ -220,7 +220,7 @@ final class AdminTests: XCTestCase {
             return nil
         }
         let e = self.expectation(description: #function)
-        data.alice.upload(message: messageId, data: message, metadata: metadata, to: data.topic, onError: { error in
+        data.alice.upload(file: (id: messageId, data: message), metadata: metadata, to: data.topic, onError: { error in
             XCTFail("\(error)")
             e.fulfill()
         }) { chain in
@@ -235,7 +235,7 @@ final class AdminTests: XCTestCase {
         _ = uploadMessage()
     }
     
-    func receiveMessage() -> (alice: Device, bob: Device, topic: Topic, message: Message)? {
+    func receiveMessage() -> (alice: Device, bob: Device, topic: Topic, message: Update)? {
         guard let data = uploadMessage() else {
             return nil
         }
@@ -270,8 +270,13 @@ final class AdminTests: XCTestCase {
             return
         }
         
+        guard let file = data.message.files.first else {
+            XCTFail("No file")
+            return
+        }
+        
         let e = self.expectation(description: #function)
-        data.bob.getFile(data.message, in: data.topic, onError: { error in
+        data.bob.getFile(file, in: data.topic, onError: { error in
             XCTFail("\(error)")
             e.fulfill()
         }) { data in
@@ -298,8 +303,7 @@ final class AdminTests: XCTestCase {
             e.fulfill()
         }
         self.wait(for: [delegate.expectation!, e], timeout: 10)
-        XCTAssertEqual(delegate.receipts.count, 1)
-        XCTAssertEqual(delegate.receipts[0], messageId)
+        XCTAssertEqual(delegate.chainState, 1)
         
     }
 }

@@ -40,7 +40,7 @@ public class Topic {
     internal(set) public var verifiedOutput: Data
     
     /// All messages which couldn't be verified yet.
-    internal(set) public var unverifiedMessages: [Message]
+    internal(set) public var unverifiedMessages: [Update]
     
     // MARK: Initialization
     
@@ -97,7 +97,7 @@ public class Topic {
         self.messageKey = SymmetricKey(data: object.messageKey)
         self.nextChainIndex = object.nextChainIndex
         self.verifiedOutput = object.verifiedOutput
-        self.unverifiedMessages = try object.unverifiedMessages.map(Message.init)
+        self.unverifiedMessages = try object.unverifiedMessages.map(Update.init)
         self.signatureKey = try SigningPrivateKey(rawRepresentation: object.signatureKey)
         self.encryptionKey = try EncryptionPrivateKey(rawRepresentation: object.encryptionKey)
     }

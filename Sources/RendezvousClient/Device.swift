@@ -19,9 +19,9 @@ public protocol DeviceDelegate: class {
     
     func device(addedTopic topic: Topic)
     
-    func device(receivedMessage message: Message, in topic: Topic, verified: Bool)
+    func device(receivedMessage message: Update, in topic: Topic, verified: Bool)
     
-    func device(receivedReceipts receipts: [MessageID], from sender: SigningPublicKey)
+    func device(receivedChainState chainState: UInt32, for topic: TopicID, from sender: SigningPublicKey)
     
     func device(foundInvalidChain index: UInt32, in topic: Topic)
 }
@@ -258,51 +258,70 @@ public final class Device: Server {
     }
     
     /**
+     Generate a new message id.
+     */
+    public func newMessageId() -> MessageID {
+        AES.GCM.Nonce().rawRepresentation
+    }
+    
+    /**
+    Upload a new message.
+    
+    - Parameter data: The message data.
+    - Parameter metadata: The metadata of the message.
+    - Parameter topic: The topic to send the message to.
+    - Parameter onError: A closure called with an error if the request fails.
+    - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+    - Parameter chain: The topic chain state after the message.
+    - Parameter id: The id generated for the message..
+    */
+    public func upload(data: Data, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ id: MessageID, _ chain: Chain) -> Void) {
+        let id = newMessageId()
+        upload(file: (id, data), metadata: metadata, to: topic, onError: onError) { chain in
+            onSuccess(id, chain)
+        }
+    }
+    
+    /**
      Upload a new message.
      
-     - Parameter message: The message data.
+     - Parameter id: The message id.
+     - Parameter data: The message file data.
      - Parameter metadata: The metadata of the message.
      - Parameter topic: The topic to send the message to.
      - Parameter onError: A closure called with an error if the request fails.
      - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
      - Parameter chain: The topic chain state after the message.
      */
-    public func upload(message: MessageID, data: Data, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ chain: Chain) -> Void) {
+    public func upload(file: (id: MessageID, data: Data)? = nil, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ chain: Chain) -> Void) {
         catching(onError: onError) {
-            // Check that the message id is valid
-            guard message.count == Constants.messageIdLength else {
-                throw RendezvousError.invalidFile
-            }
+            
             // Check that user is part of the group, and can write
             guard let index = topic.members.firstIndex(where: { $0.userKey == userKey }),
                 topic.members[index].role != .observer else {
                     throw RendezvousError.invalidRequest
             }
             // Encrypt the data
-            let nonce = try AES.GCM.Nonce(data: message)
-            let encryptedMessage = try AES.GCM.seal(data, using: topic.messageKey, nonce: nonce)
+            let (files, fileData) = try encrypt(file, key: topic.messageKey)
             let encryptedMetadata = try AES.GCM.seal(metadata, using: topic.messageKey).combined!
-            let hash = Crypto.sha256(of: encryptedMessage.ciphertext)
             
             // Create the message
-            var request = RV_TopicMessageUpload.with {
+            var request = RV_TopicUpdateUpload.with {
                 $0.deviceKey = deviceKey.rawRepresentation
                 $0.authToken = authToken
                 $0.topicID = topic.id
-                $0.file = encryptedMessage.ciphertext
-                $0.message = .with { message in
-                    message.indexInMemberList = UInt32(index)
-                    message.id = encryptedMessage.nonce.rawRepresentation
-                    message.hash = Data(hash)
-                    message.tag = encryptedMessage.tag
-                    message.metadata = encryptedMetadata
+                $0.files = fileData
+                $0.update = .with { update in
+                    update.indexInMemberList = UInt32(index)
+                    update.metadata = encryptedMetadata
+                    update.files = files
                 }
             }
             
             // Sign the message and serialize
-            try request.message.sign(with: topic.signatureKey)
-            let data = try request.serializedData()
-            upload(data, to: "topic/message", onError: onError) { data in
+            try request.update.sign(with: topic.signatureKey)
+            let requestData = try request.serializedData()
+            upload(requestData, to: "topic/message", onError: onError) { data in
                 guard let object = try? RV_TopicState.ChainState(serializedData: data) else {
                     onError(.invalidServerData)
                     return
@@ -311,6 +330,8 @@ public final class Device: Server {
             }
         }
     }
+    
+    
     
     /**
      Receive all messages for a device.
@@ -330,7 +351,7 @@ public final class Device: Server {
             try self.decrypt(topicKeyMessages: object.topicKeyMessages)
             try self.received(topicUpdates: object.topicUpdates)
             try self.decrypt(messages: object.messages)
-            try self.process(receipts: object.receipts)
+            self.process(receipts: object.receipts)
             onSuccess()
         }
     }
@@ -343,43 +364,22 @@ public final class Device: Server {
      - Parameter onError: A closure called if the request fails.
      - Parameter onSuccess: A closure called with the file data if the request succeeds.
      */
-    public func getFile(_ message: Message, in topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (Data) -> Void) {
+    public func getFile(_ file: Update.File, in topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (Data) -> Void) {
         
-        let path = "files/\(topic.id.url)/\(message.id.url)"
+        let path = "files/\(topic.id.url)/\(file.id.url)"
         download(path, headers: authenticatedHeaders, onError: onError) { data in
-            let hash = SHA256.hash(data: data)
-            guard hash == message.hash else {
+            guard SHA256.hash(data: data) == file.hash else {
                 throw RendezvousError.invalidFile
             }
             do {
-                let nonce = try AES.GCM.Nonce(data: message.id)
-                let box = try AES.GCM.SealedBox(nonce: nonce, ciphertext: data, tag: message.tag)
+                let nonce = try AES.GCM.Nonce(data: file.id)
+                let box = try AES.GCM.SealedBox(nonce: nonce, ciphertext: data, tag: file.tag)
                 let decrypted = try AES.GCM.open(box, using: topic.messageKey)
                 onSuccess(decrypted)
             } catch {
                 onError(.invalidFile)
             }
         }
-    }
-    
-    // MARK: Notifications
-    
-    public enum NotificationType: Int {
-        
-        /// No push capabilities for the device
-        case pushDisabled = 0
-        
-        /// The device is a regular iOS device
-        case iOSDevice = 1
-        
-        /// The device is used for iOS development
-        case iOSDevelopmentDevice = 2
-        
-        /// The device is a regular iOS device using a notification extension
-        case iOSNotificationExtension = 3
-        
-        /// The device is a development iOS device using a notification extension
-        case iOSDevelopmentNotificationExtension = 4
     }
     
     // MARK: Requests
@@ -499,6 +499,30 @@ public final class Device: Server {
         return (topicKeys, Array(messages.values))
     }
     
+    private func encrypt(_ file: (id: MessageID, data: Data)?, key: SymmetricKey) throws -> (files: [RV_TopicUpdate.File], data: [RV_TopicUpdateUpload.FileData]) {
+        guard let f = file else {
+            return (files: [], data: [])
+        }
+        // Check that the message id is valid
+        guard f.id.count == Constants.messageIdLength else {
+            throw RendezvousError.invalidFile
+        }
+        
+        let nonce = try AES.GCM.Nonce(data: f.id)
+        let ciphertext = try AES.GCM.seal(f.data, using: key, nonce: nonce)
+        let hash = Crypto.sha256(of: ciphertext.ciphertext)
+        let data = RV_TopicUpdateUpload.FileData.with {
+            $0.data = ciphertext.ciphertext
+            $0.id = f.id
+        }
+        let file = RV_TopicUpdate.File.with {
+            $0.hash = hash
+            $0.id = f.id
+            $0.tag = ciphertext.tag
+        }
+        return (files: [file], data: [data])
+    }
+    
     // MARK: Handling received data
     
     private func decrypt(topicKeyMessages messages: [RV_TopicKeyMessage]) throws {
@@ -574,7 +598,7 @@ public final class Device: Server {
         let encryptedMetadata = try AES.GCM.SealedBox(combined: message.content.metadata)
         let metadata = try AES.GCM.open(encryptedMetadata, using: topic.messageKey)
         
-        let message = Message(object: message, metadata: metadata, sender: sender.userKey)
+        let message = Update(object: message, metadata: metadata, sender: sender.userKey)
         // See if the topic state can be verified.
         guard message.nextChainIndex == topic.nextChainIndex + 1 else {
             // Message is not the next expected one, so mark as pending
@@ -603,8 +627,9 @@ public final class Device: Server {
             guard let sender = try? SigningPublicKey(rawRepresentation: receipt.sender) else {
                 continue
             }
-            let ids = receipt.ids.filter { $0.count == Constants.messageIdLength }
-            delegate?.device(receivedReceipts: ids, from: sender)
+            for topic in receipt.receipts {
+                delegate?.device(receivedChainState: topic.index, for: topic.id, from: sender)
+            }
         }
     }
     
@@ -668,8 +693,6 @@ public final class Device: Server {
         self.topics = topics
         super.init(url: url, appId: object.appication)
     }
-    
-    
 }
 
 private extension Data {
