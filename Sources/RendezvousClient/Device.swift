@@ -283,17 +283,17 @@ public final class Device: Server {
     }
     
     /**
-     Upload a new message.
-     
-     - Parameter id: The message id.
-     - Parameter data: The message file data.
-     - Parameter metadata: The metadata of the message.
-     - Parameter topic: The topic to send the message to.
-     - Parameter onError: A closure called with an error if the request fails.
-     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
-     - Parameter chain: The topic chain state after the message.
-     */
-    public func upload(file: (id: MessageID, data: Data)? = nil, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ chain: Chain) -> Void) {
+    Upload a new update with additional files.
+    
+    - Parameter files: The files to upload, each with an id and the file data.
+    - Parameter metadata: The metadata of the update.
+    - Parameter topic: The topic to send the update to.
+    - Parameter onError: A closure called with an error if the request fails.
+    - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+    - Parameter chain: The topic chain state after the message.
+    */
+    public func upload(files: [(id: MessageID, data: Data)] = [], metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ chain: Chain) -> Void) {
+        
         catching(onError: onError) {
             
             // Check that user is part of the group, and can write
@@ -301,8 +301,9 @@ public final class Device: Server {
                 topic.members[index].role != .observer else {
                     throw RendezvousError.invalidRequest
             }
+            
             // Encrypt the data
-            let (files, fileData) = try encrypt(file, key: topic.messageKey)
+            let files = try encrypt(files, key: topic.messageKey)
             let encryptedMetadata = try AES.GCM.seal(metadata, using: topic.messageKey).combined!
             
             // Create the message
@@ -310,11 +311,16 @@ public final class Device: Server {
                 $0.deviceKey = deviceKey.rawRepresentation
                 $0.authToken = authToken
                 $0.topicID = topic.id
-                $0.files = fileData
+                $0.files = files.map { file in
+                    .with {
+                        $0.id = file.file.id
+                        $0.data = file.data
+                    }
+                }
                 $0.update = .with { update in
                     update.indexInMemberList = UInt32(index)
                     update.metadata = encryptedMetadata
-                    update.files = files
+                    update.files = files.map { $0.file.object }
                 }
             }
             
@@ -331,7 +337,19 @@ public final class Device: Server {
         }
     }
     
-    
+    /**
+     Upload a new update with a file.
+     
+     - Parameter file: The file to upload, with an id and the file data.
+     - Parameter metadata: The metadata of the update.
+     - Parameter topic: The topic to send the update to.
+     - Parameter onError: A closure called with an error if the request fails.
+     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+     - Parameter chain: The topic chain state after the message.
+     */
+    public func upload(file: (id: MessageID, data: Data), metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ chain: Chain) -> Void) {
+        upload(files: [file], metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
+    }
     
     /**
      Receive all messages for a device.
@@ -499,28 +517,20 @@ public final class Device: Server {
         return (topicKeys, Array(messages.values))
     }
     
-    private func encrypt(_ file: (id: MessageID, data: Data)?, key: SymmetricKey) throws -> (files: [RV_TopicUpdate.File], data: [RV_TopicUpdateUpload.FileData]) {
-        guard let f = file else {
-            return (files: [], data: [])
-        }
-        // Check that the message id is valid
-        guard f.id.count == Constants.messageIdLength else {
-            throw RendezvousError.invalidFile
-        }
+    private func encrypt(_ files: [(id: MessageID, data: Data)], key: SymmetricKey) throws -> [(file: Update.File, data: Data)] {
         
-        let nonce = try AES.GCM.Nonce(data: f.id)
-        let ciphertext = try AES.GCM.seal(f.data, using: key, nonce: nonce)
-        let hash = Crypto.sha256(of: ciphertext.ciphertext)
-        let data = RV_TopicUpdateUpload.FileData.with {
-            $0.data = ciphertext.ciphertext
-            $0.id = f.id
+        return try files.map { file in
+            // Check that the message id is valid
+            guard file.id.count == Constants.messageIdLength else {
+                throw RendezvousError.invalidFile
+            }
+            
+            let nonce = try AES.GCM.Nonce(data: file.id)
+            let box = try AES.GCM.seal(file.data, using: key, nonce: nonce)
+            let hash = Crypto.sha256(of: box.ciphertext)
+            let f = Update.File(id: file.id, tag: box.tag, hash: hash)
+            return (f, file.data)
         }
-        let file = RV_TopicUpdate.File.with {
-            $0.hash = hash
-            $0.id = f.id
-            $0.tag = ciphertext.tag
-        }
-        return (files: [file], data: [data])
     }
     
     // MARK: Handling received data

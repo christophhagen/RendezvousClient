@@ -21,6 +21,12 @@ public struct Update {
         /// The hash of the encrypted file
         public let hash: Data
         
+        init(id: MessageID, tag: Data, hash: Data) {
+            self.id = id
+            self.tag = tag
+            self.hash = hash
+        }
+        
         init(object: RV_TopicUpdate.File) {
             self.id = object.id
             self.hash = object.hash
