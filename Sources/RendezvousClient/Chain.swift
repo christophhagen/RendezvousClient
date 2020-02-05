@@ -14,7 +14,7 @@ public struct Chain {
     public let output: Data
     
     init(object: RV_TopicState.ChainState) {
-        self.index = object.nextChainIndex
+        self.index = object.chainIndex
         self.output = object.output
     }
 }

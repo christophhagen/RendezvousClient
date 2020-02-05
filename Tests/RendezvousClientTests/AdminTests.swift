@@ -256,7 +256,7 @@ final class AdminTests: XCTestCase {
             return nil
         }
         XCTAssertEqual(message.metadata, self.metadata)
-        XCTAssertEqual(message.nextChainIndex, 1)
+        XCTAssertEqual(message.chainIndex, 1)
         XCTAssertTrue(delegate.verified)
         return (data.alice, data.bob, data.topic, message)
     }

@@ -600,7 +600,7 @@ public final class Device: Server {
         
         let message = Update(object: message, metadata: metadata, sender: sender.userKey)
         // See if the topic state can be verified.
-        guard message.nextChainIndex == topic.nextChainIndex + 1 else {
+        guard message.chainIndex == topic.chainIndex + 1 else {
             // Message is not the next expected one, so mark as pending
             // and download other messages
             topic.unverifiedMessages.append(message)
@@ -614,10 +614,10 @@ public final class Device: Server {
             // Invalid chain. This implies an inconsistency in the message chain,
             // which could indicate that the server is attempting to tamper with
             // the messages
-            delegate?.device(foundInvalidChain: message.nextChainIndex, in: topic)
+            delegate?.device(foundInvalidChain: message.chainIndex, in: topic)
             return
         }
-        topic.nextChainIndex = message.nextChainIndex
+        topic.chainIndex = message.chainIndex
         topic.verifiedOutput = output
         delegate?.device(receivedMessage: message, in: topic, verified: true)
     }

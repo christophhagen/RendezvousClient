@@ -33,8 +33,8 @@ public class Topic {
     /// The key used to decrypt topic key messages
     public let encryptionKey: EncryptionPrivateKey
     
-    /// The next message index expected in the chain
-    internal(set) public var nextChainIndex: UInt32
+    /// The current message index  in the chain
+    internal(set) public var chainIndex: UInt32
     
     /// The last output which could be verified.
     internal(set) public var verifiedOutput: Data
@@ -52,7 +52,7 @@ public class Topic {
         self.members = try topic.members.map(Member.init)
         self.signatureKey = topicKey.signing
         self.encryptionKey = topicKey.encryption
-        self.nextChainIndex = 0
+        self.chainIndex = 0
         self.verifiedOutput = topic.topicID
         self.unverifiedMessages = []
     }
@@ -82,7 +82,7 @@ public class Topic {
         self.members = try topic.members.map(Member.init)
         self.signatureKey = topicKey.signing
         self.encryptionKey = topicKey.encryption
-        self.nextChainIndex = 0
+        self.chainIndex = 0
         self.verifiedOutput = topic.topicID
         self.unverifiedMessages = []
     }
@@ -95,7 +95,7 @@ public class Topic {
         self.modified = Date(seconds: object.info.timestamp)
         self.members = try object.info.members.map(Member.init)
         self.messageKey = SymmetricKey(data: object.messageKey)
-        self.nextChainIndex = object.nextChainIndex
+        self.chainIndex = object.currentChainIndex
         self.verifiedOutput = object.verifiedOutput
         self.unverifiedMessages = try object.unverifiedMessages.map(Update.init)
         self.signatureKey = try SigningPrivateKey(rawRepresentation: object.signatureKey)
@@ -106,7 +106,7 @@ public class Topic {
         return .with {
             $0.info = topicObject
             $0.messageKey = messageKey.rawRepresentation
-            $0.nextChainIndex = nextChainIndex
+            $0.currentChainIndex = chainIndex
             $0.verifiedOutput = verifiedOutput
             $0.unverifiedMessages = unverifiedMessages.map { $0.object }
             $0.signatureKey = signatureKey.rawRepresentation

@@ -36,8 +36,8 @@ public struct Update {
         }
     }
     
-    /// The chain index for the following message
-    public let nextChainIndex: UInt32
+    /// The chain index for the current message
+    public let chainIndex: UInt32
     
     /// The current output of the topic message chain
     public let output: Data
@@ -54,7 +54,7 @@ public struct Update {
     public let sender: SigningPublicKey
     
     init(object: RV_DeviceDownload.Message, metadata: Data, sender: SigningPublicKey) {
-        self.nextChainIndex = object.chain.nextChainIndex
+        self.chainIndex = object.chain.chainIndex
         self.output = object.chain.output
         self.metadata = metadata
         self.files = object.content.files.map(File.init)
@@ -63,7 +63,7 @@ public struct Update {
     }
     
     init(object: RV_ClientData.TopicStore.UnverifiedMessage) throws {
-        self.nextChainIndex = object.chain.nextChainIndex
+        self.chainIndex = object.chain.chainIndex
         self.output = object.chain.output
         self.metadata = object.message.metadata
         self.signature = object.message.signature
@@ -79,7 +79,7 @@ public struct Update {
                 message.signature = signature
             }
             $0.chain = .with { chain in
-                chain.nextChainIndex = nextChainIndex
+                chain.chainIndex = chainIndex
                 chain.output = output
             }
         }
