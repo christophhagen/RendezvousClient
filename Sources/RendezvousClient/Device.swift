@@ -375,6 +375,22 @@ public final class Device: Server {
     }
     
     /**
+    Download the file data of a message.
+    
+    - Parameter message: The message to download.
+    - Parameter topic: The topic id of the message.
+    - Parameter onError: A closure called if the request fails.
+    - Parameter onSuccess: A closure called with the file data if the request succeeds.
+    */
+    public func getFile(_ file: Update.File, in topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (Data) -> Void) {
+        guard let topic = self.topics[topic] else {
+            onError(.invalidRequest)
+            return
+        }
+        getFile(file, in: topic, onError: onError, onSuccess: onSuccess)
+    }
+    
+    /**
      Download the file data of a message.
      
      - Parameter message: The message to download.
