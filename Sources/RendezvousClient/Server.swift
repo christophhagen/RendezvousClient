@@ -8,21 +8,6 @@
 import Foundation
 import Alamofire
 
-/// The public identity key of a device
-public typealias DeviceKey = Data
-
-/// The public identity key of a user
-public typealias UserKey = Data
-
-/// The id of a topic
-public typealias TopicID = Data
-
-/// The id of a message
-public typealias MessageID = Data
-
-/// An authentication token
-public typealias AuthToken = Data
-
 public class Server {
     
     public let appId: String

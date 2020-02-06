@@ -269,7 +269,7 @@ public final class Device: Server {
     /**
      Generate a new message id.
      */
-    public func newMessageId() -> MessageID {
+    public func newMessageId() -> FileID {
         AES.GCM.Nonce().rawRepresentation
     }
     
@@ -313,7 +313,7 @@ public final class Device: Server {
      - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
      - Parameter update: The topic update resulting from the upload
      */
-    public func upload(file: (id: MessageID, data: Data), metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+    public func upload(file: (id: FileID, data: Data), metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
         upload(files: [file], metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
     }
     
@@ -327,7 +327,7 @@ public final class Device: Server {
      - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
      - Parameter update: The topic update resulting from the upload
      */
-    public func upload(file: (id: MessageID, data: Data), metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+    public func upload(file: (id: FileID, data: Data), metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
         upload(files: [file], metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
     }
 
@@ -341,7 +341,7 @@ public final class Device: Server {
     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
     - Parameter update: The topic update resulting from the upload
     */
-    public func upload(files: [(id: MessageID, data: Data)] = [], metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+    public func upload(files: [(id: FileID, data: Data)] = [], metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
         guard let topic = topics[topic] else {
             onError(.invalidRequest)
             return
@@ -359,7 +359,7 @@ public final class Device: Server {
     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
     - Parameter update: The topic update resulting from the upload
     */
-    public func upload(files: [(id: MessageID, data: Data)] = [], metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+    public func upload(files: [(id: FileID, data: Data)] = [], metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
         
         catching(onError: onError) {
             
@@ -615,7 +615,7 @@ public final class Device: Server {
         return (topicKeys, Array(messages.values))
     }
     
-    private func encrypt(_ files: [(id: MessageID, data: Data)], key: SymmetricKey) throws -> [(file: Update.File, data: Data)] {
+    private func encrypt(_ files: [(id: FileID, data: Data)], key: SymmetricKey) throws -> [(file: Update.File, data: Data)] {
         
         return try files.map { file in
             // Check that the message id is valid

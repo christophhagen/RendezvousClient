@@ -13,7 +13,7 @@ public struct Update {
     public struct File {
         
         /// The id of the file
-        public let id: MessageID
+        public let id: FileID
         
         /// The authentication tag of the file
         public let tag: Data
@@ -21,7 +21,7 @@ public struct Update {
         /// The hash of the encrypted file
         public let hash: Data
         
-        init(id: MessageID, tag: Data, hash: Data) {
+        init(id: FileID, tag: Data, hash: Data) {
             self.id = id
             self.tag = tag
             self.hash = hash

@@ -7,6 +7,21 @@
 
 import Foundation
 
+/// The public identity key of a device
+public typealias DeviceKey = Data
+
+/// The public identity key of a user
+public typealias UserKey = Data
+
+/// The id of a topic
+public typealias TopicID = Data
+
+/// The id of a message
+public typealias FileID = Data
+
+/// An authentication token
+public typealias AuthToken = Data
+
 
 public enum Constants {
     
