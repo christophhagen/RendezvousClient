@@ -627,7 +627,7 @@ public final class Device: Server {
             let box = try AES.GCM.seal(file.data, using: key, nonce: nonce)
             let hash = Crypto.sha256(of: box.ciphertext)
             let f = Update.File(id: file.id, tag: box.tag, hash: hash)
-            return (f, file.data)
+            return (f, box.ciphertext)
         }
     }
     
