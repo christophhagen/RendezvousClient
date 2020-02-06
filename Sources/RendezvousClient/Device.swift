@@ -274,31 +274,33 @@ public final class Device: Server {
     }
     
     /**
-    Upload a new message.
-    
-    - Parameter data: The message data.
-    - Parameter metadata: The metadata of the message.
-    - Parameter topic: The topic to send the message to.
-    - Parameter onError: A closure called with an error if the request fails.
-    - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
-    - Parameter update: The topic update resulting from the upload
-    */
-    public func upload(data: Data, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+     Upload a new message.
+     
+     - Parameter data: The message data.
+     - Parameter metadata: The metadata of the message.
+     - Parameter topic: The topic to send the message to.
+     - Parameter onError: A closure called with an error if the request fails.
+     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+     - Parameter update: The topic update resulting from the upload
+     - Parameter verified: Indicate if the update could be verified.
+     */
+    public func upload(data: Data, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update, _ verified: Bool) -> Void) {
         let id = newMessageId()
         upload(file: (id, data), metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
     }
     
     /**
-    Upload a new message.
-    
-    - Parameter data: The message data.
-    - Parameter metadata: The metadata of the message.
-    - Parameter topic: The id of the topic to send the message to.
-    - Parameter onError: A closure called with an error if the request fails.
-    - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
-    - Parameter update: The topic update resulting from the upload
-    */
-    public func upload(data: Data, metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+     Upload a new message.
+     
+     - Parameter data: The message data.
+     - Parameter metadata: The metadata of the message.
+     - Parameter topic: The id of the topic to send the message to.
+     - Parameter onError: A closure called with an error if the request fails.
+     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+     - Parameter update: The topic update resulting from the upload
+     - Parameter verified: Indicate if the update could be verified.
+     */
+    public func upload(data: Data, metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update, _ verified: Bool) -> Void) {
         let id = newMessageId()
         upload(file: (id, data), metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
     }
@@ -312,8 +314,9 @@ public final class Device: Server {
      - Parameter onError: A closure called with an error if the request fails.
      - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
      - Parameter update: The topic update resulting from the upload
+     - Parameter verified: Indicate if the update could be verified.
      */
-    public func upload(file: (id: FileID, data: Data), metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+    public func upload(file: (id: FileID, data: Data), metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update, _ verified: Bool) -> Void) {
         upload(files: [file], metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
     }
     
@@ -326,22 +329,24 @@ public final class Device: Server {
      - Parameter onError: A closure called with an error if the request fails.
      - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
      - Parameter update: The topic update resulting from the upload
+     - Parameter verified: Indicate if the update could be verified.
      */
-    public func upload(file: (id: FileID, data: Data), metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+    public func upload(file: (id: FileID, data: Data), metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update, _ verified: Bool) -> Void) {
         upload(files: [file], metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
     }
 
     /**
-    Upload a new update with additional files.
-    
-    - Parameter files: The files to upload, each with an id and the file data.
-    - Parameter metadata: The metadata of the update.
-    - Parameter topic: The id of the topic to send the update to.
-    - Parameter onError: A closure called with an error if the request fails.
-    - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
-    - Parameter update: The topic update resulting from the upload
-    */
-    public func upload(files: [(id: FileID, data: Data)] = [], metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+     Upload a new update with additional files.
+     
+     - Parameter files: The files to upload, each with an id and the file data.
+     - Parameter metadata: The metadata of the update.
+     - Parameter topic: The id of the topic to send the update to.
+     - Parameter onError: A closure called with an error if the request fails.
+     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+     - Parameter update: The topic update resulting from the upload
+     - Parameter verified: Indicate if the update could be verified.
+     */
+    public func upload(files: [(id: FileID, data: Data)] = [], metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update, _ verified: Bool) -> Void) {
         guard let topic = topics[topic] else {
             onError(.invalidRequest)
             return
@@ -350,16 +355,17 @@ public final class Device: Server {
     }
     
     /**
-    Upload a new update with additional files.
-    
-    - Parameter files: The files to upload, each with an id and the file data.
-    - Parameter metadata: The metadata of the update.
-    - Parameter topic: The topic to send the update to.
-    - Parameter onError: A closure called with an error if the request fails.
-    - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
-    - Parameter update: The topic update resulting from the upload
+     Upload a new update with additional files.
+     
+     - Parameter files: The files to upload, each with an id and the file data.
+     - Parameter metadata: The metadata of the update.
+     - Parameter topic: The topic to send the update to.
+     - Parameter onError: A closure called with an error if the request fails.
+     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+     - Parameter update: The topic update resulting from the upload
+     - Parameter verified: Indicate if the update could be verified.
     */
-    public func upload(files: [(id: FileID, data: Data)] = [], metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+    public func upload(files: [(id: FileID, data: Data)] = [], metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update, _ verified: Bool) -> Void) {
         
         catching(onError: onError) {
             
@@ -404,7 +410,9 @@ public final class Device: Server {
                     chain: object,
                     sender: self.userKey)
                 
-                onSuccess(update)
+                let verified = topic.processMessages(update: update, delegate: self.delegate)
+                #warning("Check if the update can be verified")
+                onSuccess(update, verified)
             }
         }
     }
@@ -707,7 +715,8 @@ public final class Device: Server {
         let metadata = try AES.GCM.open(encryptedMetadata, using: topic.messageKey)
         
         let update = Update(object: message, metadata: metadata, sender: sender.userKey)
-        topic.processMessages(update: update, delegate: delegate)
+        let verified = topic.processMessages(update: update, delegate: delegate)
+        delegate?.device(receivedMessage: update, in: topic, verified: verified)
     }
     
     private func process(receipts: [RV_DeviceDownload.Receipt]) {

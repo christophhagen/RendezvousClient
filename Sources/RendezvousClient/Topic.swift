@@ -123,21 +123,24 @@ public class Topic {
         }
     }
     
-    func processMessages(update: Update, delegate: DeviceDelegate?) {
+    /**
+     Process a new update in the topic.
+     - Parameter update: The new update to process.
+     - Parameter delegate: The delegate to notify about previously unverified updates which are now verified.
+     - Returns: `true`, if the new update could be verified.
+     - Note: The state of the new update is not sent to the delegate.
+     */
+    func processMessages(update: Update, delegate: DeviceDelegate?) -> Bool {
         unverifiedMessages.append(update)
         
-        // This is to ensure that the delegate is notified exactly once for the incoming message
         var verifiedIncomingMessage = false
-        defer {
-            delegate?.device(receivedMessage: update, in: self, verified: verifiedIncomingMessage)
-        }
         
         // Sort so that oldest messages are at the end
         unverifiedMessages.sort { $0.chainIndex > $1.chainIndex }
         while let next = unverifiedMessages.last {
             // See if the topic state can be verified.
             guard next.chainIndex == chainIndex + 1 else {
-                return
+                break
             }
             
             // Calculate the new output
@@ -147,7 +150,7 @@ public class Topic {
                 // which could indicate that the server is attempting to tamper with
                 // the messages
                 delegate?.device(foundInvalidChain: next.chainIndex, in: self)
-                return
+                break
             }
             // Remove handled update
             _ = unverifiedMessages.popLast()
@@ -156,13 +159,13 @@ public class Topic {
             chainIndex = next.chainIndex
             verifiedOutput = output
             
-            // This is to ensure that the delegate is notified exactly once for the incoming message
             if next.chainIndex == update.chainIndex {
                 verifiedIncomingMessage = true
             } else {
                 delegate?.device(receivedMessage: next, in: self, verified: true)
             }
         }
+        return verifiedIncomingMessage
     }
     
 }

@@ -223,7 +223,8 @@ final class AdminTests: XCTestCase {
         data.alice.upload(file: (id: messageId, data: message), metadata: metadata, to: data.topic, onError: { error in
             XCTFail("\(error)")
             e.fulfill()
-        }) { update in
+        }) { update, verified in
+            XCTAssertTrue(verified)
             XCTAssertEqual(update.chainIndex, 1)
             e.fulfill()
         }
