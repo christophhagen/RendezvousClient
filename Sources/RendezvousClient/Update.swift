@@ -59,6 +59,15 @@ public struct Update {
     /// The public key of the sender
     public let sender: SigningPublicKey
     
+    init(update: RV_TopicUpdate, chain: RV_TopicState.ChainState, sender: SigningPublicKey) {
+        self.chainIndex = chain.chainIndex
+        self.output = chain.output
+        self.metadata = update.metadata
+        self.signature = update.signature
+        self.sender = sender
+        self.files = update.files.map(File.init)
+    }
+    
     init(object: RV_DeviceDownload.Message, metadata: Data, sender: SigningPublicKey) {
         self.chainIndex = object.chain.chainIndex
         self.output = object.chain.output

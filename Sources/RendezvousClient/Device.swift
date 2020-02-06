@@ -272,16 +272,28 @@ public final class Device: Server {
     - Parameter topic: The topic to send the message to.
     - Parameter onError: A closure called with an error if the request fails.
     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
-    - Parameter chain: The topic chain state after the message.
-    - Parameter id: The id generated for the message..
+    - Parameter update: The topic update resulting from the upload
     */
-    public func upload(data: Data, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ id: MessageID, _ chain: Chain) -> Void) {
+    public func upload(data: Data, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
         let id = newMessageId()
-        upload(file: (id, data), metadata: metadata, to: topic, onError: onError) { chain in
-            onSuccess(id, chain)
-        }
+        upload(file: (id, data), metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
+
     }
     
+    /**
+     Upload a new update with a file.
+     
+     - Parameter file: The file to upload, with an id and the file data.
+     - Parameter metadata: The metadata of the update.
+     - Parameter topic: The topic to send the update to.
+     - Parameter onError: A closure called with an error if the request fails.
+     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+     - Parameter update: The topic update resulting from the upload
+     */
+    public func upload(file: (id: MessageID, data: Data), metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+        upload(files: [file], metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
+    }
+
     /**
     Upload a new update with additional files.
     
@@ -290,9 +302,9 @@ public final class Device: Server {
     - Parameter topic: The topic to send the update to.
     - Parameter onError: A closure called with an error if the request fails.
     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
-    - Parameter chain: The topic chain state after the message.
+    - Parameter update: The topic update resulting from the upload
     */
-    public func upload(files: [(id: MessageID, data: Data)] = [], metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ chain: Chain) -> Void) {
+    public func upload(files: [(id: MessageID, data: Data)] = [], metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
         
         catching(onError: onError) {
             
@@ -332,25 +344,16 @@ public final class Device: Server {
                     onError(.invalidServerData)
                     return
                 }
-                onSuccess(Chain(object: object))
+                let update = Update(
+                    update: request.update,
+                    chain: object,
+                    sender: self.userKey)
+                
+                onSuccess(update)
             }
         }
     }
-    
-    /**
-     Upload a new update with a file.
-     
-     - Parameter file: The file to upload, with an id and the file data.
-     - Parameter metadata: The metadata of the update.
-     - Parameter topic: The topic to send the update to.
-     - Parameter onError: A closure called with an error if the request fails.
-     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
-     - Parameter chain: The topic chain state after the message.
-     */
-    public func upload(file: (id: MessageID, data: Data), metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ chain: Chain) -> Void) {
-        upload(files: [file], metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
-    }
-    
+
     /**
      Receive all messages for a device.
 
