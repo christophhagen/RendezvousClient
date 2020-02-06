@@ -277,7 +277,21 @@ public final class Device: Server {
     public func upload(data: Data, metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
         let id = newMessageId()
         upload(file: (id, data), metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
-
+    }
+    
+    /**
+    Upload a new message.
+    
+    - Parameter data: The message data.
+    - Parameter metadata: The metadata of the message.
+    - Parameter topic: The id of the topic to send the message to.
+    - Parameter onError: A closure called with an error if the request fails.
+    - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+    - Parameter update: The topic update resulting from the upload
+    */
+    public func upload(data: Data, metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+        let id = newMessageId()
+        upload(file: (id, data), metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
     }
     
     /**
@@ -293,7 +307,39 @@ public final class Device: Server {
     public func upload(file: (id: MessageID, data: Data), metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
         upload(files: [file], metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
     }
+    
+    /**
+     Upload a new update with a file.
+     
+     - Parameter file: The file to upload, with an id and the file data.
+     - Parameter metadata: The metadata of the update.
+     - Parameter topic: The id of the topic to send the update to.
+     - Parameter onError: A closure called with an error if the request fails.
+     - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+     - Parameter update: The topic update resulting from the upload
+     */
+    public func upload(file: (id: MessageID, data: Data), metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+        upload(files: [file], metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
+    }
 
+    /**
+    Upload a new update with additional files.
+    
+    - Parameter files: The files to upload, each with an id and the file data.
+    - Parameter metadata: The metadata of the update.
+    - Parameter topic: The id of the topic to send the update to.
+    - Parameter onError: A closure called with an error if the request fails.
+    - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
+    - Parameter update: The topic update resulting from the upload
+    */
+    public func upload(files: [(id: MessageID, data: Data)] = [], metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update) -> Void) {
+        guard let topic = topics[topic] else {
+            onError(.invalidRequest)
+            return
+        }
+        upload(files: files, metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
+    }
+    
     /**
     Upload a new update with additional files.
     
