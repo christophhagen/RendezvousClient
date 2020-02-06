@@ -123,236 +123,46 @@ public class Topic {
         }
     }
     
-    // MARK: Members
-    
-    /// A member of a topic
-    public struct Member {
+    func processMessages(update: Update, delegate: DeviceDelegate?) {
+        unverifiedMessages.append(update)
         
-        /// The user identity key
-        public let userKey: SigningPublicKey
-        
-        /// The signature key used when signing new messages
-        public let signatureKey: SigningPublicKey
-        
-        /// The encryption key used to encrypt the message key
-        public let encryptionKey: EncryptionPublicKey
-        
-        /// The permissions of the member
-        private(set) public var role: Role
-        
-        /**
-         Create a member from a protobuf object.
-         
-         - Parameter member: The protobuf object with the info
-         */
-        init(member: RV_Topic.MemberInfo) throws {
-            self.userKey = try SigningPublicKey(rawRepresentation: member.info.userKey)
-            self.signatureKey = try SigningPublicKey(rawRepresentation: member.signatureKey)
-            self.encryptionKey = try EncryptionPublicKey(rawRepresentation: member.info.encryptionKey)
-            self.role = try Role(raw: member.role)
+        // This is to ensure that the delegate is notified exactly once for the incoming message
+        var verifiedIncomingMessage = false
+        defer {
+            delegate?.device(receivedMessage: update, in: self, verified: verifiedIncomingMessage)
         }
         
-        var object: RV_Topic.MemberInfo {
-            .with {
-                $0.signatureKey = signatureKey.rawRepresentation
-                $0.role = role.raw
-            }
-        }
-        
-        // MARK: Roles
-
-        public enum Role {
-            
-            /// Admins are allowed to add and remove users, and read and write messages
-            case admin
-            
-            /// Participants are allowed to read and write messages
-            case participant
-            
-            /// Observers are allowed to read messages
-            case observer
-            
-            var raw: RV_Topic.MemberInfo.Role {
-                switch self {
-                case .admin: return .admin
-                case .participant: return .participant
-                case .observer: return .observer
-                }
+        // Sort so that oldest messages are at the end
+        unverifiedMessages.sort { $0.chainIndex > $1.chainIndex }
+        while let next = unverifiedMessages.last {
+            // See if the topic state can be verified.
+            guard next.chainIndex == chainIndex + 1 else {
+                return
             }
             
-            init(raw: RV_Topic.MemberInfo.Role) throws {
-                switch raw {
-                case .admin: self = .admin
-                case .participant: self = .participant
-                case .observer: self = .observer
-                default:
-                    throw RendezvousError.unknownError
-                }
+            // Calculate the new output
+            let output = Crypto.sha256(of: verifiedOutput + next.signature)
+            guard output == next.output else {
+                // Invalid chain. This implies an inconsistency in the message chain,
+                // which could indicate that the server is attempting to tamper with
+                // the messages
+                delegate?.device(foundInvalidChain: next.chainIndex, in: self)
+                return
+            }
+            // Remove handled update
+            _ = unverifiedMessages.popLast()
+            
+            // Update the topic state
+            chainIndex = next.chainIndex
+            verifiedOutput = output
+            
+            // This is to ensure that the delegate is notified exactly once for the incoming message
+            if next.chainIndex == update.chainIndex {
+                verifiedIncomingMessage = true
+            } else {
+                delegate?.device(receivedMessage: next, in: self, verified: true)
             }
         }
     }
     
-    // MARK: Private topic keys
-    
-    struct Keys {
-        
-        let signing: SigningPrivateKey
-        
-        let encryption: EncryptionPrivateKey
-        
-        let publicKeys: Key
-        
-        init(userKey: SigningPrivateKey) throws {
-            let signing = SigningPrivateKey()
-            let encryption = EncryptionPrivateKey()
-            
-            self.signing = signing
-            self.encryption = encryption
-            self.publicKeys = try Key(userKey: userKey, signatureKey: signing.publicKey, encryptionKey: encryption.publicKey)
-        }
-        
-        init(message: RV_TopicKeyMessage, preKey: EncryptionPrivateKey, userKey: SigningPublicKey) throws {
-            // Verify the topic key
-            let topicKey = try Key(object: message.topicKey, userKey: userKey)
-
-            // Decrypt the topic key
-            let decrypted = try Crypto.decrypt(message.encryptedTopicKeys, using: preKey)
-            guard decrypted.count == Crypto.eccKeyLength * 2 else {
-                throw RendezvousError.unknownError
-            }
-            
-            // Extract signature and encryption key
-            let signaturePrivateKey = try! SigningPrivateKey(rawRepresentation: decrypted[0..<Crypto.eccKeyLength])
-            let encryptionPrivateKey = try! EncryptionPrivateKey(rawRepresentation: decrypted.advanced(by: Crypto.eccKeyLength))
-            
-            // Check that public keys match
-            guard signaturePrivateKey.publicKey == topicKey.signatureKey,
-                encryptionPrivateKey.publicKey == topicKey.encryptionKey else {
-                    throw RendezvousError.unknownError
-            }
-            
-            // Store the topic key
-            self.signing = signaturePrivateKey
-            self.encryption = encryptionPrivateKey
-            self.publicKeys = topicKey
-        }
-        
-        init(object: RV_ClientData.TopicKeyPair, userKey: SigningPublicKey) throws {
-            self.signing = try SigningPrivateKey(rawRepresentation: object.signing.privateKey)
-            self.encryption = try EncryptionPrivateKey(rawRepresentation: object.encryption.privateKey)
-            self.publicKeys = try .init(object: object, userKey: userKey)
-        }
-        
-        var object: RV_ClientData.TopicKeyPair {
-            return .with { key in
-                key.signing = .with {
-                    $0.privateKey = signing.rawRepresentation
-                    $0.publicKey = publicKeys.signatureKey.rawRepresentation
-                }
-                key.encryption = .with {
-                    $0.privateKey = encryption.rawRepresentation
-                    $0.publicKey = publicKeys.encryptionKey.rawRepresentation
-                }
-                key.signature = publicKeys.signature
-            }
-        }
-        
-        func message(withPrekey key: RV_DevicePrekey) throws -> RV_TopicKeyMessage {
-            return try .with { message in
-                message.devicePreKey = key.preKey
-                message.topicKey = publicKeys.object
-                let data = publicKeys.signatureKey.rawRepresentation + publicKeys.encryptionKey.rawRepresentation
-                let preKey = try EncryptionPublicKey(rawRepresentation: key.preKey)
-                message.encryptedTopicKeys = try Crypto.encrypt(data, to: preKey)
-            }
-        }
-    }
-    
-    // MARK: Public topic keys
-    
-    struct Key {
-        
-        let userKey: SigningPublicKey
-        
-        let signatureKey: SigningPublicKey
-        
-        let encryptionKey: EncryptionPublicKey
-        
-        /// The signature of (signatureKey | encryptionKey) with the user key
-        let signature: Data
-        
-        init(userKey: SigningPrivateKey, signatureKey: SigningPublicKey, encryptionKey: EncryptionPublicKey) throws {
-            let data = signatureKey.rawRepresentation + encryptionKey.rawRepresentation
-            self.userKey = userKey.publicKey
-            self.signatureKey = signatureKey
-            self.encryptionKey = encryptionKey
-            self.signature = try userKey.signature(for: data)
-        }
-        
-        init(object: RV_TopicKeyResponse.User) throws {
-            guard let userKey = try? SigningPublicKey(rawRepresentation: object.publicKey) else {
-                throw RendezvousError.unknownError
-            }
-            try self.init(object: object.topicKey, userKey: userKey)
-        }
-        
-        init(object: RV_TopicKey, userKey: SigningPublicKey) throws {
-            guard userKey.isValidSignature(object.signature, for: object.signatureKey + object.encryptionKey) else {
-                throw RendezvousError.invalidSignature
-            }
-            guard let signatureKey = try? SigningPublicKey(rawRepresentation: object.signatureKey),
-                let encryptionKey = try? EncryptionPublicKey(rawRepresentation: object.encryptionKey) else {
-                    throw RendezvousError.unknownError
-            }
-            
-            self.userKey = userKey
-            self.signatureKey = signatureKey
-            self.encryptionKey = encryptionKey
-            self.signature = object.signature
-        }
-        
-        init(object: RV_ClientData.TopicKeyPair, userKey: SigningPublicKey) throws {
-            self.signatureKey = try SigningPublicKey(rawRepresentation: object.signing.publicKey)
-            self.encryptionKey = try EncryptionPublicKey(rawRepresentation: object.encryption.privateKey)
-            self.signature = object.signature
-            self.userKey = userKey
-        }
-        
-        init(data: Data, userKey: SigningPublicKey) throws {
-            let object: RV_TopicKey
-            do {
-                object = try RV_TopicKey(serializedData: data)
-            } catch {
-                throw RendezvousError.noResponse
-            }
-            try self.init(object: object, userKey: userKey)
-        }
-        
-        func encrypt(_ data: Data, role: Topic.Member.Role) throws -> RV_Topic.MemberInfo {
-            try .with { message in
-                message.signatureKey = signatureKey.rawRepresentation
-                message.role = role.raw
-                message.encryptedMessageKey = try Crypto.encrypt(data, to: encryptionKey)
-                message.info = .with {
-                    $0.userKey = userKey.rawRepresentation
-                    $0.encryptionKey = encryptionKey.rawRepresentation
-                    $0.signature = signature
-                }
-                
-            }
-        }
-        
-        var object: RV_TopicKey {
-            .with {
-                $0.signatureKey = signatureKey.rawRepresentation
-                $0.encryptionKey = encryptionKey.rawRepresentation
-                $0.signature = signature
-            }
-        }
-        
-        static func from(data: Data) throws -> [Key] {
-            let object = try RV_TopicKeyResponse(serializedData: data)
-            return try object.users.map(Key.init)
-        }
-    }
 }
