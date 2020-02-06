@@ -400,6 +400,30 @@ public final class Device: Server {
         }
     }
     
+    public func receivedMessageFromPush(_ data: String) throws {
+        guard let data = Data(base64Encoded: data),
+            let message = try? RV_DeviceDownload.Message(serializedData: data) else {
+                throw RendezvousError.invalidServerData
+        }
+        try decrypt(message: message)
+    }
+    
+    public func receivedTopicFromPush(_ data: String) throws {
+        guard let data = Data(base64Encoded: data),
+            let topic = try? RV_Topic(serializedData: data) else {
+                throw RendezvousError.invalidServerData
+        }
+        try process(newTopic: topic)
+    }
+    
+    public func receivedReceiptsFromPush(_ data: String) throws {
+        guard let data = Data(base64Encoded: data),
+            let topic = try? RV_DeviceDownload.Receipt(serializedData: data) else {
+                throw RendezvousError.invalidServerData
+        }
+        self.process(receipt: topic)
+    }
+    
     // MARK: Requests
     
     private var authenticatedHeaders: HTTPHeaders {
@@ -633,13 +657,15 @@ public final class Device: Server {
     }
     
     private func process(receipts: [RV_DeviceDownload.Receipt]) {
-        for receipt in receipts {
-            guard let sender = try? SigningPublicKey(rawRepresentation: receipt.sender) else {
-                continue
-            }
-            for topic in receipt.receipts {
-                delegate?.device(receivedChainState: topic.index, for: topic.id, from: sender)
-            }
+        receipts.forEach(process)
+    }
+    
+    private func process(receipt: RV_DeviceDownload.Receipt) {
+        guard let sender = try? SigningPublicKey(rawRepresentation: receipt.sender) else {
+            return
+        }
+        for topic in receipt.receipts {
+            delegate?.device(receivedChainState: topic.index, for: topic.id, from: sender)
         }
     }
     

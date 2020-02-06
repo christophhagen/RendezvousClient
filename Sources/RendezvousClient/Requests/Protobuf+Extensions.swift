@@ -11,7 +11,7 @@ import SwiftProtobuf
 extension SwiftProtobuf.Message {
     
     /**
-    Read a protobuf from a request..
+    Read a protobuf from a request.
     - Parameter data: The data from the request.
     - Throws: `RendezvousError.invalidRequest`
     */
