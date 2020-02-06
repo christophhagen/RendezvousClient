@@ -104,6 +104,15 @@ public final class Device: Server {
     // MARK: Public functions
     
     /**
+     Get a topic for a topic id.
+     - Parameter id: The id of the topic
+     - Returns: The topic, if it exists.
+     */
+    public func topic(_ id: TopicID) -> Topic? {
+        return topics[id]
+    }
+    
+    /**
      Upload new device prekeys.
      
      Device prekeys are needed for the creation of new topic keys, which in turn are used to establish a new topic.
@@ -697,28 +706,8 @@ public final class Device: Server {
         let encryptedMetadata = try AES.GCM.SealedBox(combined: message.content.metadata)
         let metadata = try AES.GCM.open(encryptedMetadata, using: topic.messageKey)
         
-        let message = Update(object: message, metadata: metadata, sender: sender.userKey)
-        // See if the topic state can be verified.
-        guard message.chainIndex == topic.chainIndex + 1 else {
-            // Message is not the next expected one, so mark as pending
-            // and download other messages
-            topic.unverifiedMessages.append(message)
-            delegate?.device(receivedMessage: message, in: topic, verified: false)
-            return
-        }
-        
-        // Calculate the new output
-        let output = Crypto.sha256(of: topic.verifiedOutput + message.signature)
-        guard output == message.output else {
-            // Invalid chain. This implies an inconsistency in the message chain,
-            // which could indicate that the server is attempting to tamper with
-            // the messages
-            delegate?.device(foundInvalidChain: message.chainIndex, in: topic)
-            return
-        }
-        topic.chainIndex = message.chainIndex
-        topic.verifiedOutput = output
-        delegate?.device(receivedMessage: message, in: topic, verified: true)
+        let update = Update(object: message, metadata: metadata, sender: sender.userKey)
+        topic.processMessages(update: update, delegate: delegate)
     }
     
     private func process(receipts: [RV_DeviceDownload.Receipt]) {
