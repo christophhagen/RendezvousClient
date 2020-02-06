@@ -21,6 +21,16 @@ public struct Update {
         /// The hash of the encrypted file
         public let hash: Data
         
+        /**
+         Create a new file with a random ID before uploading it to the server.
+         - Note: `tag` and `hash` will be left empty
+         */
+        public init() {
+            self.id = Update.newFileID()
+            self.tag = Data()
+            self.hash = Data()
+        }
+        
         init(id: FileID, tag: Data, hash: Data) {
             self.id = id
             self.tag = tag
@@ -100,7 +110,7 @@ public struct Update {
         }
     }
     
-    public static func newMessageID() -> Data {
+    public static func newFileID() -> Data {
         AES.GCM.Nonce().rawRepresentation
     }
 }
