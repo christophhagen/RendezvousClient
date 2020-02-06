@@ -7,7 +7,7 @@ let package = Package(
     name: "RendezvousClient",
     platforms: [
         .macOS(.v10_15),
-        .iOS(.v13),
+        .iOS("13.2"),
         .watchOS(.v6),
         .tvOS(.v13)
     ],
