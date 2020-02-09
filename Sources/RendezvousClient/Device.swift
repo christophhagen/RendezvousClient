@@ -55,6 +55,11 @@ public final class Device: Server {
     /// All currently existing topics with their info, indexed by their id
     var topics: [Data : Topic]
     
+    /// A list of all available topics
+    public var topicList: [Topic] {
+        Array(topics.values)
+    }
+    
     /// The delegate receiving events
     public weak var delegate: DeviceDelegate?
     
