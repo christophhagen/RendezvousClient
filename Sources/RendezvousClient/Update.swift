@@ -31,7 +31,7 @@ public struct Update {
             self.hash = Data()
         }
         
-        init(id: FileID, tag: Data, hash: Data) {
+        public init(id: FileID, tag: Data, hash: Data) {
             self.id = id
             self.tag = tag
             self.hash = hash
