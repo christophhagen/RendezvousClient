@@ -60,6 +60,9 @@ public final class Device: Server {
         Array(topics.values)
     }
     
+    /// The number of currently active file uploads
+    private(set) public var activeFileUploads = 0
+    
     /// The delegate receiving events
     public weak var delegate: DeviceDelegate?
     
@@ -405,7 +408,13 @@ public final class Device: Server {
             // Sign the message and serialize
             try request.update.sign(with: topic.signatureKey)
             let requestData = try request.serializedData()
-            upload(requestData, to: "topic/message", onError: onError) { data in
+            
+            self.activeFileUploads += 1
+            upload(requestData, to: "topic/message", onError: { error in
+                self.activeFileUploads -= 1
+                onError(error)
+            }) { data in
+                self.activeFileUploads -= 1
                 guard let object = try? RV_TopicState.ChainState(serializedData: data) else {
                     onError(.invalidServerData)
                     return
@@ -416,7 +425,6 @@ public final class Device: Server {
                     sender: self.userKey)
                 
                 let verified = topic.processMessages(update: update, delegate: self.delegate)
-                #warning("Check if the update can be verified")
                 onSuccess(update, verified)
             }
         }
