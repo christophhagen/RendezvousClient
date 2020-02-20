@@ -72,7 +72,7 @@ public class Topic {
         }
         // Decrypt the message key
         let decrypted = try Crypto.decrypt(message.encryptedMessageKey, using: topicKey.encryption)
-        guard decrypted.count == Crypto.messageKeyLength, topic.topicID.count == Crypto.topicIdLength else {
+        guard decrypted.count == Constants.messageKeyLength, topic.topicID.count == Constants.topicIdLength else {
             throw RendezvousError.unknownError
         }
         self.id = topic.topicID

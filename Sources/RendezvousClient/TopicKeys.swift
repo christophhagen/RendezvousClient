@@ -32,13 +32,13 @@ extension Topic {
 
             // Decrypt the topic key
             let decrypted = try Crypto.decrypt(message.encryptedTopicKeys, using: preKey)
-            guard decrypted.count == Crypto.eccKeyLength * 2 else {
+            guard decrypted.count == Constants.eccKeyLength * 2 else {
                 throw RendezvousError.unknownError
             }
             
             // Extract signature and encryption key
-            let signaturePrivateKey = try! SigningPrivateKey(rawRepresentation: decrypted[0..<Crypto.eccKeyLength])
-            let encryptionPrivateKey = try! EncryptionPrivateKey(rawRepresentation: decrypted.advanced(by: Crypto.eccKeyLength))
+            let signaturePrivateKey = try! SigningPrivateKey(rawRepresentation: decrypted[0..<Constants.eccKeyLength])
+            let encryptionPrivateKey = try! EncryptionPrivateKey(rawRepresentation: decrypted.advanced(by: Constants.eccKeyLength))
             
             // Check that public keys match
             guard signaturePrivateKey.publicKey == topicKey.signatureKey,

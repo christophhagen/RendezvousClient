@@ -68,18 +68,22 @@ public final class Device: Server {
     
     // MARK: Computed properties
     
+    /// The time when the device was created
     public var created: Date {
         .init(seconds: userInfo.creationTime)
     }
     
+    /// The name of the user
     public var name: String {
         userInfo.name
     }
     
+    /// The time when the info about the user last changed (including for other applications)
     public var changed: Date {
         .init(seconds: userInfo.timestamp)
     }
     
+    /// The complete list of the user's devices (including for other applications)
     public var devices: [DeviceInfo] {
         try! userInfo.devices.map(DeviceInfo.init)
     }
@@ -217,12 +221,18 @@ public final class Device: Server {
     /**
      Create a new topic.
      
+     - Parameter id: The id for the topic. If no id is set, a new one will be created.
      - Parameter members:The public keys of the members and their roles.
      - Parameter onError: A closure called with an error if the request fails.
      - Parameter onSuccess: A closure called with the topic if the request succeeds.
      - Parameter topic: The resulting topic
      */
-    public func createTopic(with members: [(SigningPublicKey, Topic.Member.Role)], onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ topic: Topic) -> Void) {
+    public func createTopic(id: TopicID? = nil, with members: [(SigningPublicKey, Topic.Member.Role)], onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ topic: Topic) -> Void) {
+        let topicId = id ?? newTopicId()
+        guard topicId.count == Constants.topicIdLength else {
+            onError(.invalidRequest)
+            return
+        }
         
         let request = RV_TopicKeyRequest.with {
             $0.publicKey = userKey.rawRepresentation
@@ -254,7 +264,7 @@ public final class Device: Server {
             let now = Date.secondsNow
             let roles = [(role: .admin, key: topicKey.publicKeys)] + memberData
             var topic = try RV_Topic.with { t in
-                t.topicID = try Crypto.newTopicId()
+                t.topicID = topicId
                 t.creationTime = now
                 t.indexOfMessageCreator = 0
                 // Encrypt the message key to each user with their topic key
@@ -279,6 +289,13 @@ public final class Device: Server {
      */
     public func newMessageId() -> FileID {
         AES.GCM.Nonce().rawRepresentation
+    }
+    
+    /**
+     Generate a new topic id.
+     */
+    public func newTopicId() -> TopicID {
+        Crypto.newTopicId()
     }
     
     /**

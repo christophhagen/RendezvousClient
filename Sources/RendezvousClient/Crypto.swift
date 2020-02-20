@@ -19,14 +19,6 @@ public typealias EncryptionKeyPair = (private: EncryptionPrivateKey, public: Enc
 
 enum Crypto {
     
-    static let eccKeyLength = 32
-    
-    static let topicIdLength = 12
-    
-    static let messageKeyLength = 32
-    
-    static let protocolSalt = "RendezvousClient".data(using: .utf8)!
-    
     static func randomBytes(count: Int) -> Data? {
         var keyData = Data(count: count)
         let result = keyData.withUnsafeMutableBytes {
@@ -44,32 +36,33 @@ enum Crypto {
         let ephemeralPublicKey = ephemeralKey.publicKey.rawRepresentation
         let sharedSecret = try ephemeralKey.sharedSecretFromKeyAgreement(with: publicKey)
         
-        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(using: SHA256.self, salt: protocolSalt, sharedInfo: ephemeralPublicKey + publicKey.rawRepresentation, outputByteCount: 32)
+        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(using: SHA256.self, salt: Constants.protocolSalt, sharedInfo: ephemeralPublicKey + publicKey.rawRepresentation, outputByteCount: 32)
         
         let ciphertext = try AES.GCM.seal(data, using: symmetricKey).combined!
         return ephemeralPublicKey + ciphertext
     }
     
     static func decrypt(_ data: Data, using privateKey: Curve25519.KeyAgreement.PrivateKey) throws -> Data {
-        guard data.count > eccKeyLength else {
+        guard data.count > Constants.eccKeyLength else {
             throw CryptoKitError.incorrectKeySize
         }
-        let ephemeralPublicKeyData = data[0..<eccKeyLength]
+        let ephemeralPublicKeyData = data[0..<Constants.eccKeyLength]
         let ephemeralPublicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: ephemeralPublicKeyData)
         
         let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: ephemeralPublicKey)
         
         let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
-            using: SHA256.self, salt: protocolSalt,
+            using: SHA256.self, salt: Constants.protocolSalt,
             sharedInfo: ephemeralPublicKeyData + privateKey.publicKey.rawRepresentation,
             outputByteCount: 32)
         
-        let sealedBox = try AES.GCM.SealedBox(combined: data.advanced(by: eccKeyLength))
+        let sealedBox = try AES.GCM.SealedBox(combined: data.advanced(by: Constants.eccKeyLength))
         return try AES.GCM.open(sealedBox, using: symmetricKey)
     }
     
-    static func newTopicId() throws -> Data {
-        SymmetricKey(size: .init(bitCount: 96)).withUnsafeBytes { Data(Array($0)) }
+    static func newTopicId() -> TopicID {
+        SymmetricKey(size: .init(bitCount: Constants.topicIdLength * 8))
+            .withUnsafeBytes { Data(Array($0)) }
     }
     
     static func sha256(of data: Data) -> Data {

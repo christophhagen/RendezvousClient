@@ -52,4 +52,15 @@ public enum Constants {
     /// The maximum length of message metadata
     public static let maximumMetadataLength = 100
     
+    /// The length of an elliptic curve key
+    static let eccKeyLength = 32
+    
+    /// The length of a message key
+    static let messageKeyLength = 32
+    
+    /// The salt used for the protocol when encrypting data
+    static let protocolSalt = "Rendezvous".data(using: .utf8)!
+    
+    
+    
 }
