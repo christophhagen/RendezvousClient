@@ -50,15 +50,17 @@ public class Server {
      
      - Parameter userName: The name of the user.
      - Parameter pin: The pin given by the server administrator.
+     - Parameter userIdentityKey: The optional private key of the user (a new key will be generated if this parameter is nil)
+     - Parameter deviceIdentityKey: The optional private key of the device (a new key will be generated if this parameter is nil)
      - Parameter completion: A closure called when the request is finished.
      - Parameter result: The created device connection, or an error.
      */
-    public func register(user userName: String, using pin: Int, onError: @escaping (_ error: RendezvousError) -> Void, onSuccess: @escaping (_ device: Device) -> Void) {
+    public func register(user userName: String, using pin: Int, userIdentityKey: SigningPrivateKey? = nil, deviceIdentityKey: SigningPrivateKey? = nil, onError: @escaping (_ error: RendezvousError) -> Void, onSuccess: @escaping (_ device: Device) -> Void) {
         
         catching(onError: onError) {
             // Create a new identity key pair
-            let userKey = Crypto.newSigningKey()
-            let deviceKey = Crypto.newSigningKey()
+            let userKey = userIdentityKey ?? Crypto.newSigningKey()
+            let deviceKey = deviceIdentityKey ?? Crypto.newSigningKey()
             
             // Create prekeys
             let (preKeys, preKeysPairs) = try Crypto.createPreKeys(count: 50, for: deviceKey)

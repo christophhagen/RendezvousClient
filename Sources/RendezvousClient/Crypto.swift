@@ -32,7 +32,7 @@ enum Crypto {
     }
 
     static func encrypt(_ data: Data, to publicKey: Curve25519.KeyAgreement.PublicKey) throws -> Data {
-        let ephemeralKey = Curve25519.KeyAgreement.PrivateKey()
+        let ephemeralKey = EncryptionPrivateKey()
         let ephemeralPublicKey = ephemeralKey.publicKey.rawRepresentation
         let sharedSecret = try ephemeralKey.sharedSecretFromKeyAgreement(with: publicKey)
         
@@ -47,7 +47,7 @@ enum Crypto {
             throw CryptoKitError.incorrectKeySize
         }
         let ephemeralPublicKeyData = data[0..<Constants.eccKeyLength]
-        let ephemeralPublicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: ephemeralPublicKeyData)
+        let ephemeralPublicKey = try EncryptionPublicKey(rawRepresentation: ephemeralPublicKeyData)
         
         let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: ephemeralPublicKey)
         
@@ -69,7 +69,7 @@ enum Crypto {
         SHA256.hash(data: data).withUnsafeBytes { Data(Array($0)) }
     }
     
-    static func createPreKeys(count: Int, for device: Curve25519.Signing.PrivateKey) throws -> (prekeys: [RV_DevicePrekey], keys: [EncryptionKeyPair])  {
+    static func createPreKeys(count: Int, for device: SigningPrivateKey) throws -> (prekeys: [RV_DevicePrekey], keys: [EncryptionKeyPair])  {
         let keys: [EncryptionKeyPair] = (0..<count).map { _ in
             let privateKey = Curve25519.KeyAgreement.PrivateKey()
             return (privateKey, privateKey.publicKey)
@@ -92,11 +92,11 @@ enum Crypto {
         }
     }
     
-    static func newEncryptionKey() -> Curve25519.KeyAgreement.PrivateKey {
+    static func newEncryptionKey() -> EncryptionPrivateKey {
         .init()
     }
     
-    static func newSigningKey() -> Curve25519.Signing.PrivateKey {
+    static func newSigningKey() -> SigningPrivateKey {
         .init()
     }
     
@@ -105,17 +105,17 @@ enum Crypto {
     }
 }
 
-extension Curve25519.KeyAgreement.PublicKey: Equatable {
+extension EncryptionPublicKey: Equatable {
     
-    public static func ==(lhs: Curve25519.KeyAgreement.PublicKey, rhs: Curve25519.KeyAgreement.PublicKey) -> Bool {
+    public static func ==(lhs: EncryptionPublicKey, rhs: EncryptionPublicKey) -> Bool {
         return lhs.rawRepresentation == rhs.rawRepresentation
     }
 }
 
 
-extension Curve25519.Signing.PublicKey: Equatable {
+extension SigningPublicKey: Equatable {
     
-    public static func ==(lhs: Curve25519.Signing.PublicKey, rhs: Curve25519.Signing.PublicKey) -> Bool {
+    public static func ==(lhs: SigningPublicKey, rhs: SigningPublicKey) -> Bool {
         return lhs.rawRepresentation == rhs.rawRepresentation
     }
 }
