@@ -87,30 +87,51 @@ public struct Update {
         self.sender = sender
     }
     
-    init(object: RV_ClientData.TopicStore.UnverifiedMessage) throws {
-        self.chainIndex = object.chain.chainIndex
-        self.output = object.chain.output
-        self.metadata = object.message.metadata
-        self.signature = object.message.signature
-        self.files = object.message.files.map(File.init)
-        self.sender = try SigningPublicKey(rawRepresentation: object.senderPublicKey)
-    }
-    
-    var object: RV_ClientData.TopicStore.UnverifiedMessage {
-        .with {
-            $0.senderPublicKey = sender.rawRepresentation
-            $0.message = .with { message in
-                message.metadata = metadata
-                message.signature = signature
-            }
-            $0.chain = .with { chain in
-                chain.chainIndex = chainIndex
-                chain.output = output
-            }
-        }
-    }
-    
+    /**
+     Create a new file id.
+     
+     - Returns: The random file id.
+     */
     public static func newFileID() -> Data {
         AES.GCM.Nonce().rawRepresentation
+    }
+    
+    /// The info to verify the message chain
+    var essence: Essence {
+        Essence(chainIndex: chainIndex, output: output, signature: signature)
+    }
+    
+    /// The necessary info needed to verify the message chain
+    public struct Essence {
+        
+        /// The chain index for the current message
+        public let chainIndex: UInt32
+        
+        /// The current output of the topic message chain
+        public let output: Data
+        
+        /// The signature of the message
+        let signature: Data
+        
+        init(chainIndex: UInt32, output: Data, signature: Data) {
+            self.chainIndex = chainIndex
+            self.output = output
+            self.signature = signature
+        }
+        
+        init(object: RV_ClientData.TopicStore.UnverifiedMessage) throws {
+            self.chainIndex = object.chainIndex
+            self.output = object.output
+            self.signature = object.signature
+        }
+        
+        var object: RV_ClientData.TopicStore.UnverifiedMessage {
+            .with {
+                $0.signature = signature
+                $0.chainIndex = chainIndex
+                $0.output = output
+            }
+        }
+        
     }
 }

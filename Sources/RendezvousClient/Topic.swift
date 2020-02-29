@@ -40,7 +40,7 @@ public class Topic {
     internal(set) public var verifiedOutput: Data
     
     /// All messages which couldn't be verified yet.
-    internal(set) public var unverifiedMessages: [Update]
+    internal(set) public var unverifiedMessages: [Update.Essence]
     
     // MARK: Initialization
     
@@ -97,7 +97,7 @@ public class Topic {
         self.messageKey = SymmetricKey(data: object.messageKey)
         self.chainIndex = object.currentChainIndex
         self.verifiedOutput = object.verifiedOutput
-        self.unverifiedMessages = try object.unverifiedMessages.map(Update.init)
+        self.unverifiedMessages = try object.unverifiedMessages.map(Update.Essence.init)
         self.signatureKey = try SigningPrivateKey(rawRepresentation: object.signatureKey)
         self.encryptionKey = try EncryptionPrivateKey(rawRepresentation: object.encryptionKey)
     }
@@ -131,7 +131,7 @@ public class Topic {
      - Note: The state of the new update is not sent to the delegate.
      */
     func processMessages(update: Update, delegate: DeviceDelegate?) -> Bool {
-        unverifiedMessages.append(update)
+        unverifiedMessages.append(update.essence)
         
         var verifiedIncomingMessage = false
         
@@ -162,7 +162,7 @@ public class Topic {
             if next.chainIndex == update.chainIndex {
                 verifiedIncomingMessage = true
             } else {
-                delegate?.device(receivedMessage: next, in: self, verified: true)
+                delegate?.device(didVerifyUpdate: next.chainIndex, in: self)
             }
         }
         return verifiedIncomingMessage
