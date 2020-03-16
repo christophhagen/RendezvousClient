@@ -10,7 +10,7 @@ import CryptoKit
 
 public struct Update {
     
-    public struct File {
+    public struct File: Equatable {
         
         /// The id of the file
         public let id: FileID
