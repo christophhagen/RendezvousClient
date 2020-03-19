@@ -685,7 +685,8 @@ public final class Device: Server {
             // Topic info is outdated
             return
         }
-        #warning("Implement topic update")
+        try oldInfo.update(topicUpdate)
+        delegate?.device(updatedTopic: oldInfo)
     }
     
     private func process(newTopic topic: RV_Topic) throws {
@@ -729,7 +730,7 @@ public final class Device: Server {
         
         let update = Update(object: message, metadata: metadata, sender: sender.userKey)
         let verified = topic.processMessages(update: update, delegate: delegate)
-        delegate?.device(receivedMessage: update, in: topic, verified: verified)
+        delegate?.device(receivedUpdate: update, in: topic, verified: verified)
     }
     
     private func process(receipts: [RV_DeviceDownload.Receipt]) {

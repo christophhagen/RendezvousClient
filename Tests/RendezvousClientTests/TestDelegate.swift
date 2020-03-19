@@ -57,8 +57,13 @@ final class TestDelegate: DeviceDelegate {
         decrement()
     }
     
-    func device(receivedMessage message: Update, in topic: Topic, verified: Bool) {
-        self.message = message
+    func device(updatedTopic topic: Topic) {
+        self.topic = topic
+        decrement()
+    }
+    
+    func device(receivedUpdate update: Update, in topic: Topic, verified: Bool) {
+        self.message = update
         self.verified = verified
         decrement()
     }

@@ -123,6 +123,11 @@ public class Topic {
         }
     }
     
+    func update(_ update: RV_Topic) throws {
+        members = try update.members.map(Member.init)
+        #warning("Validate topic update")
+    }
+    
     /**
      Process a new update in the topic.
      - Parameter update: The new update to process.

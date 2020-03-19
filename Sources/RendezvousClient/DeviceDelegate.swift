@@ -17,7 +17,9 @@ public protocol DeviceDelegate: class {
     
     func device(addedTopic topic: Topic)
     
-    func device(receivedMessage message: Update, in topic: Topic, verified: Bool)
+    func device(updatedTopic topic: Topic)
+    
+    func device(receivedUpdate update: Update, in topic: Topic, verified: Bool)
     
     func device(didVerifyUpdate update: UInt32, in topic: Topic)
     
