@@ -15,8 +15,13 @@ public class Server {
     /// The server url
     public let url: URL
     
-    
-    init(url: URL, appId: String) {
+    /**
+     Create a server connection without verifying that the server is available.
+     - Note: Use the class function `connect(to:appId:completion)` to validate the server before creating an instance.
+     - Parameter url: The url of the server (needs to be valid)
+     - Parameter appId: The app identifier to use with the server.
+     */
+    public init(url: URL, appId: String) {
         self.url = url
         self.appId = appId
     }
