@@ -134,7 +134,7 @@ public class Server {
                 return
             }
             guard let data = resp.data else {
-                onError(.noDataInReponse)
+                onError(.noDataInResponse)
                 return
             }
             do {
@@ -180,7 +180,7 @@ public class Server {
                 return
             }
             guard let data = resp.data else {
-                onError(.noDataInReponse)
+                onError(.noDataInResponse)
                 return
             }
             do {

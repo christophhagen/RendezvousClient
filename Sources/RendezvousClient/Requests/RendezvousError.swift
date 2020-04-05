@@ -16,7 +16,7 @@ public enum RendezvousError: Int, Error {
     case unknownError = 1
     
     /// The response from the server contained no data.
-    case noDataInReponse = 2
+    case noDataInResponse = 2
     
     /// The data from the server is invalid or unreadable
     case invalidServerData = 3
