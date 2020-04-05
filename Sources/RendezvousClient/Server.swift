@@ -57,10 +57,20 @@ public class Server {
      - Parameter pin: The pin given by the server administrator.
      - Parameter userIdentityKey: The optional private key of the user (a new key will be generated if this parameter is nil)
      - Parameter deviceIdentityKey: The optional private key of the device (a new key will be generated if this parameter is nil)
+     - Parameter preKeyCount: The number of pre keys to initially create.
+     - Parameter topicKeyCount: The number of topic keys to initially create.
      - Parameter completion: A closure called when the request is finished.
      - Parameter result: The created device connection, or an error.
      */
-    public func register(user userName: String, using pin: Int, userIdentityKey: SigningPrivateKey? = nil, deviceIdentityKey: SigningPrivateKey? = nil, onError: @escaping (_ error: RendezvousError) -> Void, onSuccess: @escaping (_ device: Device) -> Void) {
+    public func register(
+        user userName: String,
+        using pin: Int,
+        userIdentityKey: SigningPrivateKey? = nil,
+        deviceIdentityKey: SigningPrivateKey? = nil,
+        preKeys preKeyCount: Int = 50,
+        topicKeys topicKeyCount: Int = 50,
+        onError: @escaping (_ error: RendezvousError) -> Void,
+        onSuccess: @escaping (_ device: Device) -> Void) {
         
         catching(onError: onError) {
             // Create a new identity key pair
@@ -68,10 +78,10 @@ public class Server {
             let deviceKey = deviceIdentityKey ?? Crypto.newSigningKey()
             
             // Create prekeys
-            let (preKeys, preKeysPairs) = try Crypto.createPreKeys(count: 50, for: deviceKey)
+            let (preKeys, preKeysPairs) = try Crypto.createPreKeys(count: preKeyCount, for: deviceKey)
             
             // Create topic keys
-            let topicKeys = try Crypto.createTopicKeys(count: 50, for: userKey)
+            let topicKeys = try Crypto.createTopicKeys(count: topicKeyCount, for: userKey)
             
             let user = try create(user: userName, userKey: userKey, deviceKey: deviceKey)
             
