@@ -762,6 +762,7 @@ public final class Device: Server {
             }
             $0.topicKeys = topicKeys.map { $0.object }
             $0.topics = topics.values.map { $0.object }
+            $0.serverURL = url.absoluteString
         }
     }
     
@@ -779,8 +780,9 @@ public final class Device: Server {
     }
     
     init(object: RV_ClientData) throws {
-        self.userPrivateKey = try SigningPrivateKey(rawRepresentation: object.userPrivateKey)
         let userKey =  try SigningPublicKey(rawRepresentation: object.userInfo.publicKey)
+        
+        self.userPrivateKey = try SigningPrivateKey(rawRepresentation: object.userPrivateKey)
         self.userKey = userKey
         self.devicePrivateKey = try SigningPrivateKey(rawRepresentation: object.devicePrivateKey)
         self.deviceKey = try SigningPublicKey(rawRepresentation: object.devicePublicKey)
@@ -797,12 +799,10 @@ public final class Device: Server {
         self.topicKeys = try object.topicKeys.map {
             try Topic.Keys(object: $0, userKey: userKey)
         }
-        var topics = [Data : Topic]()
-        try object.topics.forEach {
-            let topic = try Topic(object: $0)
-            topics[topic.id] = topic
+        self.topics = try object.topics.reduce(into: [:]) { (t, s) in
+            let topic = try Topic(object: s)
+            t[topic.id] = topic
         }
-        self.topics = topics
         super.init(url: url, appId: object.appication)
     }
 }
