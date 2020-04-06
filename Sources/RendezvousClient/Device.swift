@@ -705,7 +705,6 @@ public final class Device: Server {
     }
     
     private func decrypt(messages: [RV_DeviceDownload.Message]) throws {
-        print("Received \(messages.count) messages")
         try messages.forEach(decrypt)
     }
     
