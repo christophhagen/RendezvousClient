@@ -262,6 +262,7 @@ public final class Device: Server {
             
             let result = try Topic(selfCreatedTopic: topic, withTopicKey: topicKey, messageKey: messageKey)
             self.upload(data, to: "topic/create", headers: self.authenticatedHeaders, onError: onError) {
+                self.topics[result.id] = result
                 onSuccess(result)
             }
         }
@@ -353,10 +354,20 @@ public final class Device: Server {
      - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
      - Parameter update: The topic update resulting from the upload
      - Parameter verified: Indicate if the update could be verified.
+     
+     - Note: Possible errors:
+      - `RendezvousError.invalidTopicId`, if the topic with the given id doesn't exist
+      - `RendezvousError.noPermissionToWrite`, if the user is not part of the topic, or has no write permissions.
+      - `RendezvousError.invalidFile`, if the id of a file is invalid
+      - `CryptoKitError`, if one of the files or metadata could not be encrypted.
+      - `BinaryEncodingError`, if the serialization of the request fails.
+      - `RendezvousError.noResponse`, if the server isn't available.
+      - `RendezvousError.noDataInResponse`, if the received server response contains no data.
+      - `RendezvousError.invalidServerData`, if the server data is not a valid response.
      */
     public func upload(files: [(id: FileID, data: Data)] = [], metadata: Data, to topic: TopicID, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update, _ verified: Bool) -> Void) {
         guard let topic = topics[topic] else {
-            onError(.invalidRequest)
+            onError(.invalidTopicId)
             return
         }
         upload(files: files, metadata: metadata, to: topic, onError: onError, onSuccess: onSuccess)
@@ -372,6 +383,15 @@ public final class Device: Server {
      - Parameter onSuccess: A closure called with the resulting message chain if the request succeeds.
      - Parameter update: The topic update resulting from the upload
      - Parameter verified: Indicate if the update could be verified.
+     
+     - Note: Possible errors:
+     - `RendezvousError.noPermissionToWrite`, if the user is not part of the topic, or has no write permissions.
+     - `RendezvousError.invalidFile`, if the id of a file is invalid
+     - `CryptoKitError`, if one of the files or metadata could not be encrypted.
+     - `BinaryEncodingError`, if the serialization of the request fails.
+     - `RendezvousError.noResponse`, if the server isn't available.
+     - `RendezvousError.noDataInResponse`, if the received server response contains no data.
+     - `RendezvousError.invalidServerData`, if the server data is not a valid response.
     */
     public func upload(files: [(id: FileID, data: Data)] = [], metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update, _ verified: Bool) -> Void) {
         
@@ -635,8 +655,14 @@ public final class Device: Server {
         return (topicKeys, Array(messages.values))
     }
     
+    /**
+     Encrypt all files with the given key.
+     - Parameter files: The files to encrypt with their respective ids.
+     - Parameter key: The symmetric key to use for encryption
+     - Returns: The encrypted files with the encrypted data
+     - Throws: `RendezvousError.invalidFile`, `CryptoKitError`
+     */
     private func encrypt(_ files: [(id: FileID, data: Data)], key: SymmetricKey) throws -> [(file: Update.File, data: Data)] {
-        
         return try files.map { file in
             // Check that the message id is valid
             guard file.id.count == Constants.messageIdLength else {

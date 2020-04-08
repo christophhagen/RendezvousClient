@@ -30,6 +30,9 @@ public enum RendezvousError: Int, Error {
     /// The user has no permissions to write to the topic
     case noPermissionToWrite = 6
     
+    /// The topic with the given id doesn't exist
+    case invalidTopicId = 7
+    
     // MARK: Server errors
     
     /// The request does not contain all necessary data, or some data is not properly formatted.
