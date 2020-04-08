@@ -376,11 +376,10 @@ public final class Device: Server {
     public func upload(files: [(id: FileID, data: Data)] = [], metadata: Data, to topic: Topic, onError: @escaping RendezvousErrorHandler, onSuccess: @escaping (_ update: Update, _ verified: Bool) -> Void) {
         
         catching(onError: onError) {
-            
             // Check that user is part of the group, and can write
             guard let index = topic.members.firstIndex(where: { $0.userKey == userKey }),
                 topic.members[index].role != .observer else {
-                    throw RendezvousError.invalidRequest
+                    throw RendezvousError.noPermissionToWrite
             }
             
             // Encrypt the data

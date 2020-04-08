@@ -27,6 +27,9 @@ public enum RendezvousError: Int, Error {
     /// The downloaded file is invalid (hash mismatch, decryption/authentication failure)
     case invalidFile = 5
     
+    /// The user has no permissions to write to the topic
+    case noPermissionToWrite = 6
+    
     // MARK: Server errors
     
     /// The request does not contain all necessary data, or some data is not properly formatted.
