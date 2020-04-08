@@ -33,18 +33,24 @@ extension Topic {
             self.userKey = try SigningPublicKey(rawRepresentation: member.info.userKey)
             self.signatureKey = try SigningPublicKey(rawRepresentation: member.signatureKey)
             self.encryptionKey = try EncryptionPublicKey(rawRepresentation: member.info.encryptionKey)
-            self.role = try Role(raw: member.role)
+            self.role = try Role(object: member.role)
         }
         
+        /// The member info converted to a Protobuf object
         var object: RV_Topic.MemberInfo {
             .with {
                 $0.signatureKey = signatureKey.rawRepresentation
-                $0.role = role.raw
+                $0.role = role.object
+                $0.info = .with { info in
+                    info.encryptionKey = encryptionKey.rawRepresentation
+                    info.userKey = userKey.rawRepresentation
+                }
             }
         }
         
         // MARK: Roles
 
+        /// The role of a group member
         public enum Role {
             
             /// Admins are allowed to add and remove users, and read and write messages
@@ -56,7 +62,7 @@ extension Topic {
             /// Observers are allowed to read messages
             case observer
             
-            var raw: RV_Topic.MemberInfo.Role {
+            var object: RV_Topic.MemberInfo.Role {
                 switch self {
                 case .admin: return .admin
                 case .participant: return .participant
@@ -64,8 +70,8 @@ extension Topic {
                 }
             }
             
-            init(raw: RV_Topic.MemberInfo.Role) throws {
-                switch raw {
+            init(object: RV_Topic.MemberInfo.Role) throws {
+                switch object {
                 case .admin: self = .admin
                 case .participant: self = .participant
                 case .observer: self = .observer
