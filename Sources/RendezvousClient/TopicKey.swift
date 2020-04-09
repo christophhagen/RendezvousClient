@@ -70,7 +70,7 @@ extension Topic {
         func encrypt(_ data: Data, role: Topic.Member.Role) throws -> RV_Topic.MemberInfo {
             try .with { message in
                 message.signatureKey = signatureKey.rawRepresentation
-                message.role = role.raw
+                message.role = role.object
                 message.encryptedMessageKey = try Crypto.encrypt(data, to: encryptionKey)
                 message.info = .with {
                     $0.userKey = userKey.rawRepresentation
